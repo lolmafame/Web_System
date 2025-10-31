@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,7 +17,6 @@
             line-height: 1.6;
             color: #333;
         }
-
         /* Header & Navigation */
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -571,7 +571,7 @@
                 <option value="month">This Month</option>
             </select>
         </div>
-
+        <!-- Ano toh??? -->
         <!-- Events Grid -->
         <div class="events-grid">
             <!-- Sample Event Card 1 -->
