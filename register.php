@@ -482,7 +482,7 @@
 <body>
     <div class="register-container">
         <div class="register-header">
-            <h1>🎯 Create Your Account</h1>
+            <h1>Create Your Account</h1>
             <p>Join our event management platform</p>
         </div>
 
