@@ -1136,16 +1136,16 @@ body {
     <div class="dashboard-container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h2>🎟️ EventHub</h2>
+                <h2>EventHub</h2>
                 <p>Organizer Portal</p>
             </div>
             <nav class="nav-menu">
-                <a href="?tab=dashboard" class="nav-item <?php echo $activeTab == 'dashboard' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📊</span><span>Dashboard</span></a>
-                <a href="?tab=events" class="nav-item <?php echo $activeTab == 'events' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📅</span><span>Manage Events</span></a>
-                <a href="?tab=attendees" class="nav-item <?php echo $activeTab == 'attendees' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>👥</span><span>Attendees</span></a>
-                <a href="?tab=reports" class="nav-item <?php echo $activeTab == 'reports' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📈</span><span>Reports & Analytics</span></a>
-                <a href="?tab=announcements" class="nav-item <?php echo $activeTab == 'announcements' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📢</span><span>Announcements</span></a>
-                <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>👤</span><span>Edit Profile</span></a>
+                <a href="?tab=dashboard" class="nav-item <?php echo $activeTab == 'dashboard' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Dashboard</span></a>
+                <a href="?tab=events" class="nav-item <?php echo $activeTab == 'events' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Manage Events</span></a>
+                <a href="?tab=attendees" class="nav-item <?php echo $activeTab == 'attendees' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Attendees</span></a>
+                <a href="?tab=reports" class="nav-item <?php echo $activeTab == 'reports' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Reports & Analytics</span></a>
+                <a href="?tab=announcements" class="nav-item <?php echo $activeTab == 'announcements' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Announcements</span></a>
+                <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Edit Profile</span></a>
             </nav>
             <div class="logout-section">
                 <form method="POST" action="logout.php">
@@ -1163,14 +1163,14 @@ body {
             </div>
             <?php if ($activeTab == 'dashboard'): ?>
                 <div class="welcome-banner">
-                    <h2>Welcome back, <?php echo htmlspecialchars($username); ?>! 👋</h2>
+                    <h2>Welcome back, <?php echo htmlspecialchars($username); ?>! </h2>
                     <p>Here's an overview of your event management activities</p>
                 </div>
                 <div class="stats-grid">
-                    <div class="stat-card purple"><div class="stat-icon">📅</div><div class="stat-info"><h3><?php echo $totalEvents; ?></h3><p>Total Events</p></div></div>
-                    <div class="stat-card blue"><div class="stat-icon">✅</div><div class="stat-info"><h3><?php echo $activeEvents; ?></h3><p>Active Events</p></div></div>
-                    <div class="stat-card green"><div class="stat-icon">👥</div><div class="stat-info"><h3><?php echo $totalAttendees; ?></h3><p>Total Attendees</p></div></div>
-                    <div class="stat-card orange"><div class="stat-icon">💰</div><div class="stat-info"><h3>$<?php echo number_format($totalRevenue); ?></h3><p>Total Revenue</p></div></div>
+                    <div class="stat-card purple"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $totalEvents; ?></h3><p>Total Events</p></div></div>
+                    <div class="stat-card blue"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $activeEvents; ?></h3><p>Active Events</p></div></div>
+                    <div class="stat-card green"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $totalAttendees; ?></h3><p>Total Attendees</p></div></div>
+                    <div class="stat-card orange"><div class="stat-icon"></div><div class="stat-info"><h3>$<?php echo number_format($totalRevenue); ?></h3><p>Total Revenue</p></div></div>
                 </div>
                 <div class="events-table-container">
                     <h3 style="margin-bottom: 1rem; color: #333;">Recent Events</h3>

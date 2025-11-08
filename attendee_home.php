@@ -1383,33 +1383,27 @@ $registeredEvents = array_filter($events, function($event) {
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h2>🎟️ EventHub</h2>
+                <h2>EventHub</h2>
                 <p>Attendee Portal</p>
             </div>
 
             <nav class="nav-menu">
                 <a href="?tab=dashboard" class="nav-item <?php echo $activeTab == 'dashboard' ? 'active' : ''; ?>">
-                    <span>📊</span>
                     <span>Dashboard</span>
                 </a>
                 <a href="?tab=events" class="nav-item <?php echo $activeTab == 'events' ? 'active' : ''; ?>">
-                    <span>📅</span>
                     <span>Browse Events</span>
                 </a>
                 <a href="?tab=registrations" class="nav-item <?php echo $activeTab == 'registrations' ? 'active' : ''; ?>">
-                    <span>✅</span>
                     <span>My Registrations</span>
                 </a>
                 <a href="?tab=tickets" class="nav-item <?php echo $activeTab == 'tickets' ? 'active' : ''; ?>">
-                    <span>🎫</span>
                     <span>My Tickets</span>
                 </a>
                 <a href="?tab=announcements" class="nav-item <?php echo $activeTab == 'announcements' ? 'active' : ''; ?>">
-                    <span>🔔</span>
                     <span>Announcements</span>
                 </a>
                 <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>">
-                    <span>👤</span>
                     <span>Edit Profile</span>
                 </a>
             </nav>
@@ -1458,28 +1452,28 @@ $registeredEvents = array_filter($events, function($event) {
 
                 <div class="stats-grid">
                     <div class="stat-card purple">
-                        <div class="stat-icon">📅</div>
+                        <div class="stat-icon"></div>
                         <div class="stat-info">
                             <h3><?php echo count(array_filter($events, function($e) { return $e['available'] > 0; })); ?></h3>
                             <p>Available Events</p>
                         </div>
                     </div>
                     <div class="stat-card blue">
-                        <div class="stat-icon">✅</div>
+                        <div class="stat-icon"></div>
                         <div class="stat-info">
                             <h3><?php echo count($_SESSION['registrations']); ?></h3>
                             <p>My Registrations</p>
                         </div>
                     </div>
                     <div class="stat-card green">
-                        <div class="stat-icon">🎫</div>
+                        <div class="stat-icon"></div>
                         <div class="stat-info">
                             <h3><?php echo count($_SESSION['registrations']); ?></h3>
                             <p>Confirmed Tickets</p>
                         </div>
                     </div>
                     <div class="stat-card orange">
-                        <div class="stat-icon">🔔</div>
+                        <div class="stat-icon"></div>
                         <div class="stat-info">
                             <h3>3</h3>
                             <p>New Announcements</p>
@@ -1491,22 +1485,22 @@ $registeredEvents = array_filter($events, function($event) {
                     <h3>Quick Actions</h3>
                     <div class="action-cards">
                         <a href="?tab=events" class="action-card">
-                            <div class="action-card-icon">📅</div>
+                            <div class="action-card-icon"></div>
                             <h4>Browse Events</h4>
                             <p>Explore upcoming events</p>
                         </a>
                         <a href="?tab=registrations" class="action-card">
-                            <div class="action-card-icon">✅</div>
+                            <div class="action-card-icon"></div>
                             <h4>My Registrations</h4>
                             <p>View registered events</p>
                         </a>
                         <a href="?tab=tickets" class="action-card">
-                            <div class="action-card-icon">🎫</div>
+                            <div class="action-card-icon"></div>
                             <h4>My Tickets</h4>
                             <p>Access your tickets</p>
                         </a>
                         <a href="?tab=announcements" class="action-card">
-                            <div class="action-card-icon">🔔</div>
+                            <div class="action-card-icon"></div>
                             <h4>Announcements</h4>
                             <p>Stay updated</p>
                         </a>

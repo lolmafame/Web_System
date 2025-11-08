@@ -629,6 +629,28 @@
             }
         }
 
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Touch device hover adjustments */
+        @media (hover: none) {
+            .event-card:hover {
+                transform: none;
+            }
+
+            .btn-primary:hover,
+            .btn-register:hover {
+                transform: none;
+            }
+
+            .btn-secondary:hover {
+                background: transparent;
+                color: white;
+            }
+        }
+
         /* Touch device hover adjustments */
         @media (hover: none) {
             .event-card:hover {
@@ -651,7 +673,7 @@
     <!-- Header & Navigation -->
     <header>
         <nav>
-            <div class="logo">🎟️ EventHub</div>
+            <div class="logo">EventHub</div>
             <div class="menu-toggle" id="menuToggle">
                 <span></span>
                 <span></span>
