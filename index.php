@@ -723,122 +723,15 @@
         </div>
 
         <!-- Events Grid -->
-        <div class="events-grid">
-            <!-- Sample Event Card 1 -->
-            <div class="event-card">
-                <div class="event-image">📊</div>
-                <div class="event-content">
-                    <span class="event-type">Conference</span>
-                    <h3 class="event-title">Digital Marketing Summit 2025</h3>
-                    <div class="event-details">
-                        <div class="event-detail-item">📅 November 15, 2025</div>
-                        <div class="event-detail-item">🕒 9:00 AM - 5:00 PM</div>
-                        <div class="event-detail-item">📍 Grand Convention Center</div>
-                    </div>
-                    <div class="event-capacity">
-                        <span>Available Slots:</span>
-                        <strong>45/100</strong>
-                    </div>
-                    <button class="btn-register">Register Now</button>
-                </div>
-            </div>
-
-            <!-- Sample Event Card 2 -->
-            <div class="event-card">
-                <div class="event-image">💻</div>
-                <div class="event-content">
-                    <span class="event-type">Workshop</span>
-                    <h3 class="event-title">Web Development Bootcamp</h3>
-                    <div class="event-details">
-                        <div class="event-detail-item">📅 November 20, 2025</div>
-                        <div class="event-detail-item">🕒 10:00 AM - 4:00 PM</div>
-                        <div class="event-detail-item">📍 Tech Hub Innovation Center</div>
-                    </div>
-                    <div class="event-capacity">
-                        <span>Available Slots:</span>
-                        <strong>12/30</strong>
-                    </div>
-                    <button class="btn-register">Register Now</button>
-                </div>
-            </div>
-
-            <!-- Sample Event Card 3 -->
-            <div class="event-card">
-                <div class="event-image">🎓</div>
-                <div class="event-content">
-                    <span class="event-type">Seminar</span>
-                    <h3 class="event-title">AI & Machine Learning Fundamentals</h3>
-                    <div class="event-details">
-                        <div class="event-detail-item">📅 November 25, 2025</div>
-                        <div class="event-detail-item">🕒 2:00 PM - 6:00 PM</div>
-                        <div class="event-detail-item">📍 University Auditorium</div>
-                    </div>
-                    <div class="event-capacity">
-                        <span>Available Slots:</span>
-                        <strong>0/50</strong>
-                    </div>
-                    <button class="btn-register" disabled>Fully Booked</button>
-                </div>
-            </div>
-
-            <!-- Sample Event Card 4 -->
-            <div class="event-card">
-                <div class="event-image">🎨</div>
-                <div class="event-content">
-                    <span class="event-type">Workshop</span>
-                    <h3 class="event-title">UI/UX Design Masterclass</h3>
-                    <div class="event-details">
-                        <div class="event-detail-item">📅 December 1, 2025</div>
-                        <div class="event-detail-item">🕒 1:00 PM - 5:00 PM</div>
-                        <div class="event-detail-item">📍 Creative Studio</div>
-                    </div>
-                    <div class="event-capacity">
-                        <span>Available Slots:</span>
-                        <strong>18/25</strong>
-                    </div>
-                    <button class="btn-register">Register Now</button>
-                </div>
-            </div>
-
-            <!-- Sample Event Card 5 -->
-            <div class="event-card">
-                <div class="event-image">💼</div>
-                <div class="event-content">
-                    <span class="event-type">Conference</span>
-                    <h3 class="event-title">Business Innovation Forum</h3>
-                    <div class="event-details">
-                        <div class="event-detail-item">📅 December 5, 2025</div>
-                        <div class="event-detail-item">🕒 8:00 AM - 6:00 PM</div>
-                        <div class="event-detail-item">📍 International Convention Hall</div>
-                    </div>
-                    <div class="event-capacity">
-                        <span>Available Slots:</span>
-                        <strong>80/150</strong>
-                    </div>
-                    <button class="btn-register">Register Now</button>
-                </div>
-            </div>
-
-            <!-- Sample Event Card 6 -->
-            <div class="event-card">
-                <div class="event-image">🔬</div>
-                <div class="event-content">
-                    <span class="event-type">Seminar</span>
-                    <h3 class="event-title">Data Science for Beginners</h3>
-                    <div class="event-details">
-                        <div class="event-detail-item">📅 December 10, 2025</div>
-                        <div class="event-detail-item">🕒 3:00 PM - 7:00 PM</div>
-                        <div class="event-detail-item">📍 Science Park Lecture Hall</div>
-                    </div>
-                    <div class="event-capacity">
-                        <span>Available Slots:</span>
-                        <strong>35/40</strong>
-                    </div>
-                    <button class="btn-register">Register Now</button>
-                </div>
+        <div class="events-grid" id="eventsGrid">
+            <!-- Events will be dynamically loaded here -->
+            
+            <!-- No Events Message -->
+            <div class="no-events-message" id="noEventsMessage">
+                <h3>No Events Available</h3>
+                <p>There are currently no events matching your criteria. Please check back later or adjust your filters.</p>
             </div>
         </div>
-    </section>
 
     <!-- Contact Section -->
     <section class="contact-section" id="contact">

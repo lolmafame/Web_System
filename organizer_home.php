@@ -1,25 +1,21 @@
 <?php
 session_start();
+
+// Redirect to login if not authenticated
 if(!isset($_SESSION['username'])) {
-    $_SESSION['username'] = "Admin Organizer";
+    header('Location: login.php');
+    exit();
 }
+
 $username = $_SESSION['username'];
 
+// Initialize empty arrays if not set
 if(!isset($_SESSION['organizer_events'])) {
-    $_SESSION['organizer_events'] = [
-        ['id' => 1, 'title' => 'Digital Marketing Summit 2025', 'type' => 'Conference', 'icon' => '📊', 'date' => 'November 15, 2025', 'time' => '9:00 AM - 5:00 PM', 'location' => 'Grand Convention Center', 'registered' => 55, 'capacity' => 100, 'status' => 'active', 'description' => 'Join industry leaders to explore the latest trends in digital marketing.'],
-        ['id' => 2, 'title' => 'Web Development Bootcamp', 'type' => 'Workshop', 'icon' => '💻', 'date' => 'November 20, 2025', 'time' => '10:00 AM - 4:00 PM', 'location' => 'Tech Hub Innovation Center', 'registered' => 18, 'capacity' => 30, 'status' => 'active', 'description' => 'Hands-on workshop covering modern web development technologies.'],
-        ['id' => 3, 'title' => 'AI & Machine Learning Seminar', 'type' => 'Seminar', 'icon' => '🤖', 'date' => 'December 5, 2025', 'time' => '2:00 PM - 6:00 PM', 'location' => 'Innovation Center Hall A', 'registered' => 42, 'capacity' => 80, 'status' => 'active', 'description' => 'Explore the future of AI and machine learning applications.']
-    ];
+    $_SESSION['organizer_events'] = [];
 }
 
 if(!isset($_SESSION['attendees'])) {
-    $_SESSION['attendees'] = [
-        ['id' => 1, 'name' => 'Juan Dela Cruz', 'email' => 'juan@example.com', 'event_id' => 1, 'status' => 'confirmed'],
-        ['id' => 2, 'name' => 'Maria Santos', 'email' => 'maria@example.com', 'event_id' => 1, 'status' => 'confirmed'],
-        ['id' => 3, 'name' => 'Pedro Garcia', 'email' => 'pedro@example.com', 'event_id' => 2, 'status' => 'confirmed'],
-        ['id' => 4, 'name' => 'Ana Lopez', 'email' => 'ana@example.com', 'event_id' => 3, 'status' => 'confirmed'],
-    ];
+    $_SESSION['attendees'] = [];
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -1140,16 +1136,16 @@ body {
                 <p>Organizer Portal</p>
             </div>
             <nav class="nav-menu">
-                <a href="?tab=dashboard" class="nav-item <?php echo $activeTab == 'dashboard' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Dashboard</span></a>
-                <a href="?tab=events" class="nav-item <?php echo $activeTab == 'events' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Manage Events</span></a>
-                <a href="?tab=attendees" class="nav-item <?php echo $activeTab == 'attendees' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Attendees</span></a>
-                <a href="?tab=reports" class="nav-item <?php echo $activeTab == 'reports' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Reports & Analytics</span></a>
-                <a href="?tab=announcements" class="nav-item <?php echo $activeTab == 'announcements' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Announcements</span></a>
-                <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Edit Profile</span></a>
+                <a href="?tab=dashboard" class="nav-item <?php echo $activeTab == 'dashboard' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📊</span><span>Dashboard</span></a>
+                <a href="?tab=events" class="nav-item <?php echo $activeTab == 'events' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📅</span><span>Manage Events</span></a>
+                <a href="?tab=attendees" class="nav-item <?php echo $activeTab == 'attendees' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>👥</span><span>Attendees</span></a>
+                <a href="?tab=reports" class="nav-item <?php echo $activeTab == 'reports' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📈</span><span>Reports & Analytics</span></a>
+                <a href="?tab=announcements" class="nav-item <?php echo $activeTab == 'announcements' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📢</span><span>Announcements</span></a>
+                <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>👤</span><span>Edit Profile</span></a>
             </nav>
             <div class="logout-section">
                 <form method="POST" action="logout.php">
-                    <button class="logout-btn" type="submit">Logout</button>
+                    <button class="logout-btn" type="submit">🚪 Logout</button>
                 </form>
             </div>
         </aside>
@@ -1163,32 +1159,36 @@ body {
             </div>
             <?php if ($activeTab == 'dashboard'): ?>
                 <div class="welcome-banner">
-                    <h2>Welcome back, <?php echo htmlspecialchars($username); ?>! </h2>
+                    <h2>Welcome back, <?php echo htmlspecialchars($username); ?>! 👋</h2>
                     <p>Here's an overview of your event management activities</p>
                 </div>
                 <div class="stats-grid">
-                    <div class="stat-card purple"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $totalEvents; ?></h3><p>Total Events</p></div></div>
-                    <div class="stat-card blue"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $activeEvents; ?></h3><p>Active Events</p></div></div>
-                    <div class="stat-card green"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $totalAttendees; ?></h3><p>Total Attendees</p></div></div>
-                    <div class="stat-card orange"><div class="stat-icon"></div><div class="stat-info"><h3>$<?php echo number_format($totalRevenue); ?></h3><p>Total Revenue</p></div></div>
+                    <div class="stat-card purple"><div class="stat-icon">📅</div><div class="stat-info"><h3><?php echo $totalEvents; ?></h3><p>Total Events</p></div></div>
+                    <div class="stat-card blue"><div class="stat-icon">✅</div><div class="stat-info"><h3><?php echo $activeEvents; ?></h3><p>Active Events</p></div></div>
+                    <div class="stat-card green"><div class="stat-icon">👥</div><div class="stat-info"><h3><?php echo $totalAttendees; ?></h3><p>Total Attendees</p></div></div>
+                    <div class="stat-card orange"><div class="stat-icon">💰</div><div class="stat-info"><h3>$<?php echo number_format($totalRevenue); ?></h3><p>Total Revenue</p></div></div>
                 </div>
-                <div class="events-table-container">
-                    <h3 style="margin-bottom: 1rem; color: #333;">Recent Events</h3>
-                    <table class="events-table">
-                        <thead><tr><th>Event</th><th>Date & Time</th><th>Attendance</th><th>Status</th><th>Actions</th></tr></thead>
-                        <tbody>
-                            <?php foreach (array_slice($events, 0, 5) as $event): ?>
-                                <tr>
-                                    <td><div class="event-title-cell"><div class="event-icon-small"><?php echo $event['icon']; ?></div><div class="event-title-info"><h4><?php echo htmlspecialchars($event['title']); ?></h4><span class="event-type-badge"><?php echo $event['type']; ?></span></div></div></td>
-                                    <td><?php echo $event['date']; ?><br><small style="color: #999;"><?php echo $event['time']; ?></small></td>
-                                    <td><div class="progress-mini"><div class="progress-bar-mini"><div class="progress-fill-mini" style="width: <?php echo ($event['registered'] / $event['capacity']) * 100; ?>%"></div></div><span style="white-space: nowrap;"><?php echo $event['registered']; ?>/<?php echo $event['capacity']; ?></span></div></td>
-                                    <td><span class="status-badge <?php echo $event['status']; ?>"><?php echo ucfirst($event['status']); ?></span></td>
-                                    <td><div class="action-buttons"><button class="btn-icon btn-edit" onclick="editEvent(<?php echo $event['id']; ?>)" title="Edit">✏️</button><button class="btn-icon btn-delete" onclick="deleteEvent(<?php echo $event['id']; ?>)" title="Delete">🗑️</button></div></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
+                <?php if (count($events) == 0): ?>
+                    <div class="empty-state"><div class="empty-state-icon">📅</div><h3>No Events Yet</h3><p>Start by creating your first event to see it here</p><button class="btn-create" onclick="window.location.href='?tab=events'">Go to Events</button></div>
+                <?php else: ?>
+                    <div class="events-table-container">
+                        <h3 style="margin-bottom: 1rem; color: #333;">Recent Events</h3>
+                        <table class="events-table">
+                            <thead><tr><th>Event</th><th>Date & Time</th><th>Attendance</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>
+                                <?php foreach (array_slice($events, 0, 5) as $event): ?>
+                                    <tr>
+                                        <td><div class="event-title-cell"><div class="event-icon-small"><?php echo $event['icon']; ?></div><div class="event-title-info"><h4><?php echo htmlspecialchars($event['title']); ?></h4><span class="event-type-badge"><?php echo $event['type']; ?></span></div></div></td>
+                                        <td><?php echo $event['date']; ?><br><small style="color: #999;"><?php echo $event['time']; ?></small></td>
+                                        <td><div class="progress-mini"><div class="progress-bar-mini"><div class="progress-fill-mini" style="width: <?php echo ($event['registered'] / $event['capacity']) * 100; ?>%"></div></div><span style="white-space: nowrap;"><?php echo $event['registered']; ?>/<?php echo $event['capacity']; ?></span></div></td>
+                                        <td><span class="status-badge <?php echo $event['status']; ?>"><?php echo ucfirst($event['status']); ?></span></td>
+                                        <td><div class="action-buttons"><button class="btn-icon btn-edit" onclick="editEvent(<?php echo $event['id']; ?>)" title="Edit">✏️</button><button class="btn-icon btn-delete" onclick="deleteEvent(<?php echo $event['id']; ?>)" title="Delete">🗑️</button></div></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             <?php elseif ($activeTab == 'events'): ?>
                 <div class="page-header">
                     <div class="page-header-content"><h2>Event Management</h2><p>Create, edit, and manage your events</p></div>
@@ -1251,37 +1251,16 @@ body {
                     <div class="page-header-content"><h2>Reports & Analytics</h2><p>Track your event performance and insights</p></div>
                 </div>
                 <div class="reports-container">
-                    <div class="report-card"><h3>📊 Event Attendance Overview</h3><div class="chart-placeholder">Chart: Event Registration Trends</div></div>
-                    <div class="report-card"><h3>💰 Revenue Analysis</h3><div class="chart-placeholder">Chart: Revenue by Event Type</div></div>
-                    <div class="report-card"><h3>📈 Performance Metrics</h3><div class="chart-placeholder">Chart: Monthly Performance Comparison</div></div>
+                    <div class="report-card"><h3>📊 Event Attendance Overview</h3><div class="chart-placeholder">Chart: Event Registration Trends<br><small>Data will appear once you have events with attendees</small></div></div>
+                    <div class="report-card"><h3>💰 Revenue Analysis</h3><div class="chart-placeholder">Chart: Revenue by Event Type<br><small>Data will appear once you have events with attendees</small></div></div>
+                    <div class="report-card"><h3>📈 Performance Metrics</h3><div class="chart-placeholder">Chart: Monthly Performance Comparison<br><small>Data will appear once you have events with attendees</small></div></div>
                 </div>
             <?php elseif ($activeTab == 'announcements'): ?>
                 <div class="page-header">
                     <div class="page-header-content"><h2>Announcements</h2><p>Communicate with your attendees</p></div>
                     <button class="btn-create" onclick="alert('Create announcement feature coming soon!')"><span>➕</span><span>New Announcement</span></button>
                 </div>
-                <div class="events-table-container">
-                    <h3 style="margin-bottom: 1rem; color: #333;">Recent Announcements</h3>
-                    <table class="events-table">
-                        <thead><tr><th>Title</th><th>Target Event</th><th>Date Posted</th><th>Status</th><th>Actions</th></tr></thead>
-                        <tbody>
-                            <tr>
-                                <td><strong>Welcome to Digital Marketing Summit</strong></td>
-                                <td>Digital Marketing Summit 2025</td>
-                                <td>Oct 29, 2025</td>
-                                <td><span class="status-badge active">Published</span></td>
-                                <td><div class="action-buttons"><button class="btn-icon btn-edit" title="Edit">✏️</button><button class="btn-icon btn-delete" title="Delete">🗑️</button></div></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Venue Change Notice</strong></td>
-                                <td>Web Development Bootcamp</td>
-                                <td>Oct 26, 2025</td>
-                                <td><span class="status-badge active">Published</span></td>
-                                <td><div class="action-buttons"><button class="btn-icon btn-edit" title="Edit">✏️</button><button class="btn-icon btn-delete" title="Delete">🗑️</button></div></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <div class="empty-state"><div class="empty-state-icon">📢</div><h3>No Announcements Yet</h3><p>Create announcements to communicate with your event attendees</p><button class="btn-create" onclick="alert('Create announcement feature coming soon!')">Create Announcement</button></div>
             <?php elseif ($activeTab == 'profile'): ?>
                 <div class="page-header">
                     <div class="page-header-content"><h2>Profile</h2><p>Manage your account and preferences</p></div>
@@ -1291,8 +1270,8 @@ body {
                     <form style="max-width: 600px;">
                         <div class="form-group"><label>Full Name</label><input type="text" name="fullname" value="<?php echo htmlspecialchars($username); ?>"></div>
                         <div class="form-group"><label>Email Address</label><input type="email" name="email" value="organizer@example.com"></div>
-                        <div class="form-group"><label>Phone Number</label><input type="tel" name="phone" value="+63 912 345 6789"></div>
-                        <div class="form-group"><label>Organization</label><input type="text" name="organization" value="EventHub Organization"></div>
+                        <div class="form-group"><label>Phone Number</label><input type="tel" name="phone" value=""></div>
+                        <div class="form-group"><label>Organization</label><input type="text" name="organization" value=""></div>
                         <button type="submit" class="btn-submit" onclick="alert('Profile saved successfully!'); return false;">Save Changes</button>
                     </form>
                 </div>

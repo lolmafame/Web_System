@@ -1,45 +1,20 @@
 <?php
 session_start();
-// Temporarily disable login restriction for testing
-// if(!isset($_SESSION['user_id']) || $_SESSION['role'] != 'attendee'){
-//     header("Location: login.php");
-//     exit();
-// }
 
-// You can hardcode temporary test values
-if(!isset($_SESSION['username'])) {
-    $_SESSION['username'] = "Test Attendee";
+if(!isset($_SESSION['user_id']) || $_SESSION['role'] != 'attendee'){
+    header("Location: login.php");
+    exit();
 }
 
-$username = $_SESSION['username'];
+$username = $_SESSION['username'] ?? 'Guest';
 
-// Sample events data (testing with 2 events only)
-$events = [
-    [
-        'id' => 1,
-        'title' => 'Digital Marketing Summit 2025',
-        'type' => 'Conference',
-        'icon' => '📊',
-        'date' => 'November 15, 2025',
-        'time' => '9:00 AM - 5:00 PM',
-        'location' => 'Grand Convention Center',
-        'available' => 45,
-        'capacity' => 100,
-        'description' => 'Join industry leaders to explore the latest trends in digital marketing and social media strategies.'
-    ],
-    [
-        'id' => 2,
-        'title' => 'Web Development Bootcamp',
-        'type' => 'Workshop',
-        'icon' => '💻',
-        'date' => 'November 20, 2025',
-        'time' => '10:00 AM - 4:00 PM',
-        'location' => 'Tech Hub Innovation Center',
-        'available' => 12,
-        'capacity' => 30,
-        'description' => 'Hands-on workshop covering modern web development technologies including React, Node.js, and more.'
-    ]
-];
+// Database connection should be included here
+// include 'db_connection.php';
+
+// Fetch events from database
+// $stmt = $pdo->query("SELECT * FROM events WHERE status = 'active' ORDER BY event_date ASC");
+// $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$events = []; // Replace with actual database query
 
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -52,6 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     switch ($_POST['action']) {
         case 'register':
             $eventId = intval($_POST['eventId']);
+            // Add database logic to register user for event
+            // Check if event exists and has available slots
+            // Insert into registrations table
+            // Update available slots
+            
             $event = null;
             foreach ($events as $e) {
                 if ($e['id'] == $eventId) {
@@ -70,6 +50,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
         case 'cancel':
             $eventId = intval($_POST['eventId']);
+            // Add database logic to cancel registration
+            // Delete from registrations table
+            // Update available slots
+            
             $_SESSION['registrations'] = array_filter($_SESSION['registrations'], function($id) use ($eventId) {
                 return $id != $eventId;
             });
@@ -86,10 +70,27 @@ if (!isset($_SESSION['registrations'])) {
     $_SESSION['registrations'] = [];
 }
 
-// Get registered events
+// Fetch registered events from database
+// $stmt = $pdo->prepare("SELECT e.* FROM events e 
+//                        INNER JOIN registrations r ON e.id = r.event_id 
+//                        WHERE r.user_id = ? ORDER BY e.event_date ASC");
+// $stmt->execute([$_SESSION['user_id']]);
+// $registeredEvents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $registeredEvents = array_filter($events, function($event) {
     return in_array($event['id'], $_SESSION['registrations']);
 });
+
+// Fetch announcements from database
+// $stmt = $pdo->query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 10");
+// $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$announcements = []; // Replace with actual database query
+
+// Get statistics
+$availableEventsCount = count(array_filter($events, function($e) { 
+    return isset($e['available']) && $e['available'] > 0; 
+}));
+$myRegistrationsCount = count($registeredEvents);
+$newAnnouncementsCount = count($announcements);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1452,30 +1453,30 @@ $registeredEvents = array_filter($events, function($event) {
 
                 <div class="stats-grid">
                     <div class="stat-card purple">
-                        <div class="stat-icon"></div>
+                        <div class="stat-icon">📅</div>
                         <div class="stat-info">
-                            <h3><?php echo count(array_filter($events, function($e) { return $e['available'] > 0; })); ?></h3>
+                            <h3><?php echo $availableEventsCount; ?></h3>
                             <p>Available Events</p>
                         </div>
                     </div>
                     <div class="stat-card blue">
-                        <div class="stat-icon"></div>
+                        <div class="stat-icon">✅</div>
                         <div class="stat-info">
-                            <h3><?php echo count($_SESSION['registrations']); ?></h3>
+                            <h3><?php echo $myRegistrationsCount; ?></h3>
                             <p>My Registrations</p>
                         </div>
                     </div>
                     <div class="stat-card green">
-                        <div class="stat-icon"></div>
+                        <div class="stat-icon">🎫</div>
                         <div class="stat-info">
-                            <h3><?php echo count($_SESSION['registrations']); ?></h3>
+                            <h3><?php echo $myRegistrationsCount; ?></h3>
                             <p>Confirmed Tickets</p>
                         </div>
                     </div>
                     <div class="stat-card orange">
-                        <div class="stat-icon"></div>
+                        <div class="stat-icon">📢</div>
                         <div class="stat-info">
-                            <h3>3</h3>
+                            <h3><?php echo $newAnnouncementsCount; ?></h3>
                             <p>New Announcements</p>
                         </div>
                     </div>
@@ -1485,22 +1486,22 @@ $registeredEvents = array_filter($events, function($event) {
                     <h3>Quick Actions</h3>
                     <div class="action-cards">
                         <a href="?tab=events" class="action-card">
-                            <div class="action-card-icon"></div>
+                            <div class="action-card-icon">🔍</div>
                             <h4>Browse Events</h4>
                             <p>Explore upcoming events</p>
                         </a>
                         <a href="?tab=registrations" class="action-card">
-                            <div class="action-card-icon"></div>
+                            <div class="action-card-icon">📝</div>
                             <h4>My Registrations</h4>
                             <p>View registered events</p>
                         </a>
                         <a href="?tab=tickets" class="action-card">
-                            <div class="action-card-icon"></div>
+                            <div class="action-card-icon">🎟️</div>
                             <h4>My Tickets</h4>
                             <p>Access your tickets</p>
                         </a>
                         <a href="?tab=announcements" class="action-card">
-                            <div class="action-card-icon"></div>
+                            <div class="action-card-icon">📣</div>
                             <h4>Announcements</h4>
                             <p>Stay updated</p>
                         </a>
@@ -1527,62 +1528,76 @@ $registeredEvents = array_filter($events, function($event) {
                     </select>
                 </div>
 
-                <div class="events-grid" id="eventsGrid">
-                    <?php foreach ($events as $event): 
-                        $isRegistered = in_array($event['id'], $_SESSION['registrations']);
-                        $isFull = $event['available'] == 0;
-                        $gradientColor = $event['type'] == 'Conference' ? 'linear-gradient(135deg, #667eea, #764ba2)' :
-                                        ($event['type'] == 'Workshop' ? 'linear-gradient(135deg, #f093fb, #f5576c)' :
-                                        'linear-gradient(135deg, #4facfe, #00f2fe)');
-                    ?>
-                        <div class="event-card" data-title="<?php echo strtolower($event['title']); ?>" data-type="<?php echo $event['type']; ?>">
-                            <div class="event-image" style="background: <?php echo $gradientColor; ?>">
-                                <span class="event-icon"><?php echo $event['icon']; ?></span>
-                            </div>
-                            <div class="event-content">
-                                <span class="event-type"><?php echo $event['type']; ?></span>
-                                <h3><?php echo htmlspecialchars($event['title']); ?></h3>
-                                <p class="event-description"><?php echo htmlspecialchars($event['description']); ?></p>
-                                <div class="event-details">
-                                    <div class="detail-item">
-                                        <span>📅</span>
-                                        <span><?php echo $event['date']; ?></span>
-                                    </div>
-                                    <div class="detail-item">
-                                        <span>🕐</span>
-                                        <span><?php echo $event['time']; ?></span>
-                                    </div>
-                                    <div class="detail-item">
-                                        <span>📍</span>
-                                        <span><?php echo htmlspecialchars($event['location']); ?></span>
-                                    </div>
+                <?php if (count($events) == 0): ?>
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📅</div>
+                        <h3>No Events Available</h3>
+                        <p>There are currently no events to display. Check back later!</p>
+                    </div>
+                <?php else: ?>
+                    <div class="events-grid" id="eventsGrid">
+                        <?php foreach ($events as $event): 
+                            $isRegistered = in_array($event['id'], $_SESSION['registrations']);
+                            $isFull = $event['available'] == 0;
+                            $eventType = $event['type'] ?? 'Event';
+                            $gradientColor = $eventType == 'Conference' ? 'linear-gradient(135deg, #667eea, #764ba2)' :
+                                            ($eventType == 'Workshop' ? 'linear-gradient(135deg, #f093fb, #f5576c)' :
+                                            'linear-gradient(135deg, #4facfe, #00f2fe)');
+                        ?>
+                            <div class="event-card" data-title="<?php echo strtolower($event['title'] ?? ''); ?>" data-type="<?php echo $eventType; ?>">
+                                <div class="event-image" style="background: <?php echo $gradientColor; ?>">
+                                    <span class="event-icon"><?php echo $event['icon'] ?? '📅'; ?></span>
                                 </div>
-                                <div class="capacity-bar">
-                                    <div class="capacity-info">
-                                        <span>Available Slots</span>
-                                        <strong><?php echo $event['available']; ?>/<?php echo $event['capacity']; ?></strong>
+                                <div class="event-content">
+                                    <span class="event-type"><?php echo htmlspecialchars($eventType); ?></span>
+                                    <h3><?php echo htmlspecialchars($event['title'] ?? 'Untitled Event'); ?></h3>
+                                    <p class="event-description"><?php echo htmlspecialchars($event['description'] ?? ''); ?></p>
+                                    <div class="event-details">
+                                        <div class="detail-item">
+                                            <span>📅</span>
+                                            <span><?php echo htmlspecialchars($event['date'] ?? 'TBD'); ?></span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span>🕐</span>
+                                            <span><?php echo htmlspecialchars($event['time'] ?? 'TBD'); ?></span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span>📍</span>
+                                            <span><?php echo htmlspecialchars($event['location'] ?? 'TBD'); ?></span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar">
-                                        <div class="progress-fill" style="width: <?php echo ($event['available'] / $event['capacity']) * 100; ?>%"></div>
+                                    <div class="capacity-bar">
+                                        <div class="capacity-info">
+                                            <span>Available Slots</span>
+                                            <strong><?php echo $event['available'] ?? 0; ?>/<?php echo $event['capacity'] ?? 0; ?></strong>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <?php 
+                                            $capacity = $event['capacity'] ?? 1;
+                                            $available = $event['available'] ?? 0;
+                                            $percentage = $capacity > 0 ? ($available / $capacity) * 100 : 0;
+                                            ?>
+                                            <div class="progress-fill" style="width: <?php echo $percentage; ?>%"></div>
+                                        </div>
                                     </div>
+                                    <?php if ($isRegistered): ?>
+                                        <button class="btn-registered" disabled>
+                                            ✅ Already Registered
+                                        </button>
+                                    <?php elseif ($isFull): ?>
+                                        <button class="btn-full" disabled>
+                                            ❌ Fully Booked
+                                        </button>
+                                    <?php else: ?>
+                                        <button class="btn-register" onclick="registerEvent(<?php echo $event['id']; ?>)">
+                                            Register Now
+                                        </button>
+                                    <?php endif; ?>
                                 </div>
-                                <?php if ($isRegistered): ?>
-                                    <button class="btn-registered" disabled>
-                                        ✅ Already Registered
-                                    </button>
-                                <?php elseif ($isFull): ?>
-                                    <button class="btn-full" disabled>
-                                        ❌ Fully Booked
-                                    </button>
-                                <?php else: ?>
-                                    <button class="btn-register" onclick="registerEvent(<?php echo $event['id']; ?>)">
-                                        Register Now
-                                    </button>
-                                <?php endif; ?>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
 
             <?php elseif ($activeTab == 'registrations'): ?>
                 <!-- My Registrations -->
@@ -1602,27 +1617,27 @@ $registeredEvents = array_filter($events, function($event) {
                     <div class="registrations-list">
                         <?php foreach ($registeredEvents as $event): ?>
                             <div class="registration-card">
-                                <div class="registration-icon"><?php echo $event['icon']; ?></div>
+                                <div class="registration-icon"><?php echo $event['icon'] ?? '📅'; ?></div>
                                 <div class="registration-info">
                                     <div class="registration-header">
                                         <div>
-                                            <h3><?php echo htmlspecialchars($event['title']); ?></h3>
-                                            <span class="event-type"><?php echo $event['type']; ?></span>
+                                            <h3><?php echo htmlspecialchars($event['title'] ?? 'Untitled Event'); ?></h3>
+                                            <span class="event-type"><?php echo htmlspecialchars($event['type'] ?? 'Event'); ?></span>
                                         </div>
                                         <span class="status-badge">Confirmed</span>
                                     </div>
                                     <div class="registration-details">
                                         <div class="detail-item">
                                             <span>📅</span>
-                                            <span><?php echo $event['date']; ?></span>
+                                            <span><?php echo htmlspecialchars($event['date'] ?? 'TBD'); ?></span>
                                         </div>
                                         <div class="detail-item">
                                             <span>🕐</span>
-                                            <span><?php echo $event['time']; ?></span>
+                                            <span><?php echo htmlspecialchars($event['time'] ?? 'TBD'); ?></span>
                                         </div>
                                         <div class="detail-item">
                                             <span>📍</span>
-                                            <span><?php echo htmlspecialchars($event['location']); ?></span>
+                                            <span><?php echo htmlspecialchars($event['location'] ?? 'TBD'); ?></span>
                                         </div>
                                     </div>
                                     <div class="registration-actions">
@@ -1658,10 +1673,10 @@ $registeredEvents = array_filter($events, function($event) {
                         <?php foreach ($registeredEvents as $event): ?>
                             <div class="ticket-card">
                                 <div class="ticket-header">
-                                    <div class="ticket-icon"><?php echo $event['icon']; ?></div>
+                                    <div class="ticket-icon"><?php echo $event['icon'] ?? '🎫'; ?></div>
                                     <div>
-                                        <h3><?php echo htmlspecialchars($event['title']); ?></h3>
-                                        <span class="ticket-type"><?php echo $event['type']; ?></span>
+                                        <h3><?php echo htmlspecialchars($event['title'] ?? 'Untitled Event'); ?></h3>
+                                        <span class="ticket-type"><?php echo htmlspecialchars($event['type'] ?? 'Event'); ?></span>
                                     </div>
                                 </div>
                                 <div class="ticket-qr">
@@ -1670,15 +1685,15 @@ $registeredEvents = array_filter($events, function($event) {
                                 <div class="ticket-info">
                                     <div class="ticket-detail">
                                         <span class="label">Date</span>
-                                        <span class="value"><?php echo $event['date']; ?></span>
+                                        <span class="value"><?php echo htmlspecialchars($event['date'] ?? 'TBD'); ?></span>
                                     </div>
                                     <div class="ticket-detail">
                                         <span class="label">Time</span>
-                                        <span class="value"><?php echo $event['time']; ?></span>
+                                        <span class="value"><?php echo htmlspecialchars($event['time'] ?? 'TBD'); ?></span>
                                     </div>
                                     <div class="ticket-detail">
                                         <span class="label">Venue</span>
-                                        <span class="value"><?php echo htmlspecialchars($event['location']); ?></span>
+                                        <span class="value"><?php echo htmlspecialchars($event['location'] ?? 'TBD'); ?></span>
                                     </div>
                                     <div class="ticket-detail">
                                         <span class="label">Ticket ID</span>
@@ -1698,40 +1713,30 @@ $registeredEvents = array_filter($events, function($event) {
                     <p>Stay updated with the latest news and updates</p>
                 </div>
 
-                <div class="announcements-list">
-                    <div class="announcement-card">
-                        <div class="announcement-icon new">🎉</div>
-                        <div class="announcement-content">
-                            <div class="announcement-header">
-                                <h3>New Event: Digital Marketing Summit 2025</h3>
-                                <span class="announcement-date">2 days ago</span>
-                            </div>
-                            <p>We're excited to announce our upcoming Digital Marketing Summit! Register now to secure your spot.</p>
-                        </div>
+                <?php if (count($announcements) == 0): ?>
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📢</div>
+                        <h3>No Announcements</h3>
+                        <p>There are currently no announcements to display.</p>
                     </div>
-
-                    <div class="announcement-card">
-                        <div class="announcement-icon new">⚠️</div>
-                        <div class="announcement-content">
-                            <div class="announcement-header">
-                                <h3>Venue Change: Web Development Bootcamp</h3>
-                                <span class="announcement-date">5 days ago</span>
+                <?php else: ?>
+                    <div class="announcements-list">
+                        <?php foreach ($announcements as $announcement): ?>
+                            <div class="announcement-card">
+                                <div class="announcement-icon <?php echo ($announcement['is_new'] ?? false) ? 'new' : ''; ?>">
+                                    <?php echo $announcement['icon'] ?? 'ℹ️'; ?>
+                                </div>
+                                <div class="announcement-content">
+                                    <div class="announcement-header">
+                                        <h3><?php echo htmlspecialchars($announcement['title'] ?? 'Announcement'); ?></h3>
+                                        <span class="announcement-date"><?php echo htmlspecialchars($announcement['date'] ?? ''); ?></span>
+                                    </div>
+                                    <p><?php echo htmlspecialchars($announcement['content'] ?? ''); ?></p>
+                                </div>
                             </div>
-                            <p>Please note that the Web Development Bootcamp venue has been changed to Tech Hub Innovation Center.</p>
-                        </div>
+                        <?php endforeach; ?>
                     </div>
-
-                    <div class="announcement-card">
-                        <div class="announcement-icon">ℹ️</div>
-                        <div class="announcement-content">
-                            <div class="announcement-header">
-                                <h3>Registration Reminder</h3>
-                                <span class="announcement-date">1 week ago</span>
-                            </div>
-                            <p>Don't forget to complete your registration for upcoming events. Limited slots available!</p>
-                        </div>
-                    </div>
-                </div>
+                <?php endif; ?>
 
             <?php elseif ($activeTab == 'profile'): ?>
                 <!-- Edit Profile -->
@@ -1755,21 +1760,21 @@ $registeredEvents = array_filter($events, function($event) {
                         </div>
                         <div class="form-group">
                             <label>Email Address</label>
-                            <input type="email" name="email" value="attendee@example.com">
+                            <input type="email" name="email" value="<?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label>Phone Number</label>
-                            <input type="tel" name="phone" value="+63 912 345 6789">
+                            <input type="tel" name="phone" value="<?php echo htmlspecialchars($_SESSION['phone'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label>Organization</label>
-                            <input type="text" name="organization" value="University of Caloocan City">
+                            <input type="text" name="organization" value="<?php echo htmlspecialchars($_SESSION['organization'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label>Bio</label>
-                            <textarea name="bio" rows="4">Event enthusiast and lifelong learner</textarea>
+                            <textarea name="bio" rows="4"><?php echo htmlspecialchars($_SESSION['bio'] ?? ''); ?></textarea>
                         </div>
-                        <button type="submit" class="btn-save" onclick="alert('Profile updated successfully!'); return false;">Save Changes</button>
+                        <button type="submit" class="btn-save">Save Changes</button>
                     </form>
                 </div>
 
@@ -1821,16 +1826,21 @@ $registeredEvents = array_filter($events, function($event) {
 
         // Filter events by search and type
         function filterEvents() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const typeFilter = document.getElementById('typeFilter').value;
+            const searchInput = document.getElementById('searchInput');
+            const typeFilter = document.getElementById('typeFilter');
+            
+            if (!searchInput || !typeFilter) return;
+            
+            const searchTerm = searchInput.value.toLowerCase();
+            const typeValue = typeFilter.value;
             const eventCards = document.querySelectorAll('.event-card');
 
             eventCards.forEach(card => {
-                const title = card.getAttribute('data-title');
-                const type = card.getAttribute('data-type');
+                const title = card.getAttribute('data-title') || '';
+                const type = card.getAttribute('data-type') || '';
                 
                 const matchesSearch = title.includes(searchTerm);
-                const matchesType = typeFilter === '' || type === typeFilter;
+                const matchesType = typeValue === '' || type === typeValue;
 
                 if (matchesSearch && matchesType) {
                     card.style.display = 'block';
@@ -1845,33 +1855,6 @@ $registeredEvents = array_filter($events, function($event) {
             if (confirm('Are you sure you want to register for this event?')) {
                 const formData = new FormData();
                 formData.append('action', 'register');
-                formData.append('eventId', eventId);
-
-                fetch('', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        location.reload();
-                    } else {
-                        alert(data.message);
-                    }
-                })
-                .catch(error => {
-                    alert('An error occurred. Please try again.');
-                    console.error('Error:', error);
-                });
-            }
-        }
-
-        // Cancel registration
-        function cancelRegistration(eventId) {
-            if (confirm('Are you sure you want to cancel this registration?')) {
-                const formData = new FormData();
-                formData.append('action', 'cancel');
                 formData.append('eventId', eventId);
 
                 fetch('', {
