@@ -2,33 +2,62 @@
 // Start session
 session_start();
 
-// Temporary quick-login test (no database yet)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = $_POST['email'];
-    $password = $_POST['password'];
+// Database configuration (adjust if needed)
+$servername = "localhost";
+$db_username = "root";
+$db_password = "";
+$dbname = "event_management";
 
-    // Fake simple test condition
-    if (!empty($email) && !empty($password)) {
-        // Check email to determine role
-        if (strpos($email, 'organizer') !== false || strpos($email, 'org') !== false) {
-            // Organizer login
-            $_SESSION['user_id'] = 2;
-            $_SESSION['role'] = 'organizer';
-            $_SESSION['username'] = 'Admin Organizer';
-            header("Location: organizer_home.php");
-            exit();
-        } else {
-            // Attendee login
-            $_SESSION['user_id'] = 1;
-            $_SESSION['role'] = 'attendee';
-            $_SESSION['username'] = 'Demo Attendee';
-            header("Location: attendee_home.php");
-            exit();
-        }
-    } else {
+// Connect to DB
+$conn = new mysqli($servername, $db_username, $db_password, $dbname);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+$error = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+    $password = isset($_POST['password']) ? $_POST['password'] : '';
+
+    if (empty($email) || empty($password)) {
         $error = "Please enter your email and password.";
+    } else {
+        // Fetch user by email
+        $stmt = $conn->prepare("SELECT id, role, first_name, last_name, password_hash FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $stmt->store_result();
+
+        if ($stmt->num_rows === 1) {
+            $stmt->bind_result($id, $role, $first_name, $last_name, $password_hash);
+            $stmt->fetch();
+
+            if (password_verify($password, $password_hash)) {
+                // Successful login
+                $_SESSION['user_id'] = $id;
+                $_SESSION['role'] = $role;
+                $_SESSION['username'] = trim($first_name . ' ' . $last_name);
+
+                if ($role === 'organizer') {
+                    header("Location: organizer_home.php");
+                    exit();
+                } else {
+                    header("Location: attendee_home.php");
+                    exit();
+                }
+            } else {
+                $error = "Invalid email or password.";
+            }
+        } else {
+            $error = "Invalid email or password.";
+        }
+
+        $stmt->close();
     }
 }
+
+$conn->close();
 ?>
 
 <!DOCTYPE html>
