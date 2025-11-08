@@ -71,12 +71,11 @@ $conn->close();
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 1rem;
-            overflow: hidden;
         }
         .login-container {
             background: white;
@@ -85,7 +84,6 @@ $conn->close();
             overflow: hidden;
             width: 100%;
             max-width: 420px;
-            max-height: 90vh;
             display: flex;
             flex-direction: column;
         }
@@ -97,7 +95,7 @@ $conn->close();
         }
         .login-header h1 { font-size: 1.75rem; margin-bottom: 0.3rem; }
         .login-header p { opacity: 0.9; font-size: 0.9rem; }
-        .login-body { padding: 1.5rem; overflow-y: auto; }
+        .login-body { padding: 1.5rem; }
         .form-group { margin-bottom: 1.2rem; }
         .form-group label {
             display: block; margin-bottom: 0.4rem;
@@ -115,15 +113,13 @@ $conn->close();
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        .remember-forgot {
-            display: flex; justify-content: space-between;
-            align-items: center; margin-bottom: 1.2rem; font-size: 0.85rem;
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-bottom: 1.2rem;
+            font-size: 0.85rem;
         }
-        .remember-me { display: flex; align-items: center; gap: 0.4rem; }
-        .forgot-password {
-            color: #667eea; text-decoration: none; transition: opacity 0.3s;
-        }
-        .forgot-password:hover { opacity: 0.7; }
         .btn-login {
             width: 100%; padding: 0.875rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -134,6 +130,9 @@ $conn->close();
         .btn-login:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-login:active {
+            transform: translateY(0);
         }
         .divider {
             text-align: center; margin: 1.2rem 0; position: relative;
@@ -179,7 +178,7 @@ $conn->close();
         <div class="login-body">
             <?php if (isset($error)) echo "<div class='alert alert-error'>$error</div>"; ?>
 
-            <form id="loginForm" method="POST">
+            <form id="loginForm" method="POST" action="login.php">
                 <div class="form-group">
                     <label for="email">Email Address</label>
                     <input type="email" id="email" name="email" placeholder="Enter your email" required>
@@ -190,13 +189,10 @@ $conn->close();
                     <input type="password" id="password" name="password" placeholder="Enter your password" required>
                 </div>
 
-                <div class="remember-forgot">
-                    <label class="remember-me">
-                        <input type="checkbox" name="remember" id="remember">
-                        <span>Remember me</span>
-                    </label>
-                    <a href="#" class="forgot-password">Forgot Password?</a>
-                </div>
+                <label class="remember-me">
+                    <input type="checkbox" name="remember" id="remember">
+                    <span>Remember me</span>
+                </label>
 
                 <button type="submit" class="btn-login">Login</button>
             </form>

@@ -1,3 +1,119 @@
+<?php
+session_start();
+
+// If user is already logged in, redirect them
+if(isset($_SESSION['user_id'])){
+    // Check their role and send to correct dashboard
+    if($_SESSION['role'] == 'organizer'){
+        header("Location: organizer_dashboard.php");
+    } else {
+        header("Location: attendee_dashboard.php");
+    }
+    exit();
+}
+
+// Variables to store messages
+$error = '';
+$success = '';
+
+// Check if form was submitted
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    
+    // Get all form data
+    $role = $_POST['role'];
+    $first_name = trim($_POST['first_name']);
+    $last_name = trim($_POST['last_name']);
+    $email = trim($_POST['email']);
+    $phone = trim($_POST['phone']);
+    $organization = trim($_POST['organization']);
+    $password = $_POST['password'];
+    $confirm_password = $_POST['confirm_password'];
+
+    // Start validation - check each field one by one
+    
+    // Check if role is selected
+    if (empty($role) || ($role != 'attendee' && $role != 'organizer')) {
+        $error = 'Please select a valid role';
+    } 
+    // Check if names are filled
+    elseif (empty($first_name) || empty($last_name)) {
+        $error = 'First name and last name are required';
+    } 
+    // Check if email is valid
+    elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'Please enter a valid email address';
+    } 
+    // Check password length
+    elseif (empty($password) || strlen($password) < 8) {
+        $error = 'Password must be at least 8 characters';
+    } 
+    // Check if password has uppercase letter
+    elseif (!preg_match('/[A-Z]/', $password)) {
+        $error = 'Password must contain at least one uppercase letter';
+    } 
+    // Check if password has number
+    elseif (!preg_match('/[0-9]/', $password)) {
+        $error = 'Password must contain at least one number';
+    } 
+    // Check if passwords match
+    elseif ($password !== $confirm_password) {
+        $error = 'Passwords do not match';
+    } 
+    // If all validation passed
+    else {
+        
+        // Database settings - CHANGE THESE TO YOUR DATABASE INFO
+        $db_host = 'localhost';
+        $db_name = 'event_management';
+        $db_user = 'root';
+        $db_pass = '';
+
+        try {
+            // Connect to database
+            $connection = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+            $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+            // Check if email already exists in database
+            $check_email = $connection->prepare("SELECT id FROM users WHERE email = ?");
+            $check_email->execute([$email]);
+            
+            // If email exists, show error
+            if ($check_email->rowCount() > 0) {
+                $error = 'Email address already registered';
+            } 
+            // If email is new, create account
+            else {
+                // Make password secure (hash it)
+                $secure_password = password_hash($password, PASSWORD_DEFAULT);
+
+                // Prepare SQL to insert new user
+                $insert_user = $connection->prepare("INSERT INTO users (role, first_name, last_name, email, phone, organization, password, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+                
+                // Execute the insert
+                $insert_user->execute([
+                    $role, 
+                    $first_name, 
+                    $last_name, 
+                    $email, 
+                    $phone, 
+                    $organization, 
+                    $secure_password
+                ]);
+
+                // Show success message
+                $success = 'Registration successful! Redirecting to login...';
+                
+                // Redirect to login page after 2 seconds
+                header("refresh:2;url=login.php");
+            }
+            
+        } catch(PDOException $e) {
+            // If database error, show message
+            $error = 'Registration failed. Please try again.';
+        }
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -53,7 +169,6 @@
             padding: 1.5rem;
         }
 
-        /* Role Selection Step */
         .role-selection {
             display: block;
         }
@@ -118,7 +233,7 @@
             margin-bottom: 0.4rem;
         }
 
-        .role-card p {
+        .role-card > p {
             color: #666;
             font-size: 0.85rem;
             line-height: 1.4;
@@ -154,7 +269,7 @@
             transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        .btn-continue:hover {
+        .btn-continue:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
@@ -165,7 +280,6 @@
             transform: none;
         }
 
-        /* Registration Form Step */
         .registration-form {
             display: none;
         }
@@ -189,8 +303,7 @@
             font-size: 0.9rem;
         }
 
-        .form-group input,
-        .form-group select {
+        .form-group input {
             width: 100%;
             padding: 0.75rem;
             border: 2px solid #e0e0e0;
@@ -199,8 +312,7 @@
             transition: all 0.3s;
         }
 
-        .form-group input:focus,
-        .form-group select:focus {
+        .form-group input:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
@@ -306,7 +418,6 @@
             padding: 0.75rem;
             border-radius: 8px;
             margin-bottom: 1rem;
-            display: none;
             font-size: 0.9rem;
         }
 
@@ -314,9 +425,16 @@
             background: #fee;
             color: #c33;
             border: 1px solid #fcc;
+            display: <?php echo !empty($error) ? 'block' : 'none'; ?>;
         }
 
-        /* Mobile Responsive Styles */
+        .alert-success {
+            background: #efe;
+            color: #3c3;
+            border: 1px solid #cfc;
+            display: <?php echo !empty($success) ? 'block' : 'none'; ?>;
+        }
+
         @media (max-width: 640px) {
             body {
                 padding: 0.5rem;
@@ -368,7 +486,7 @@
                 font-size: 1rem;
             }
 
-            .role-card p {
+            .role-card > p {
                 font-size: 0.8rem;
             }
 
@@ -419,7 +537,6 @@
             }
         }
 
-        /* Tablet Responsive Styles */
         @media (min-width: 641px) and (max-width: 1024px) {
             .register-container {
                 max-width: 700px;
@@ -434,7 +551,6 @@
             }
         }
 
-        /* Small height screens */
         @media (max-height: 700px) {
             .register-header h1 {
                 font-size: 1.2rem;
@@ -461,7 +577,6 @@
             }
         }
 
-        /* Touch device hover adjustments */
         @media (hover: none) {
             .role-card:hover {
                 transform: none;
@@ -487,7 +602,7 @@
         </div>
 
         <div class="register-body">
-            <!-- Step 1: Role Selection -->
+            <!-- Step 1: Choose Role (Attendee or Organizer) -->
             <div class="role-selection" id="roleSelectionStep">
                 <div class="role-selection-title">
                     <h2>Choose Your Role</h2>
@@ -495,6 +610,7 @@
                 </div>
 
                 <div class="role-cards">
+                    <!-- Attendee Card -->
                     <div class="role-card" onclick="selectRole('attendee')">
                         <input type="radio" name="role" value="attendee" id="roleAttendee">
                         <div class="role-icon">👤</div>
@@ -508,6 +624,7 @@
                         </ul>
                     </div>
 
+                    <!-- Organizer Card -->
                     <div class="role-card" onclick="selectRole('organizer')">
                         <input type="radio" name="role" value="organizer" id="roleOrganizer">
                         <div class="role-icon">👨‍💼</div>
@@ -535,44 +652,57 @@
                 </div>
             </div>
 
-            <!-- Step 2: Registration Form -->
+            <!-- Step 2: Fill Registration Form -->
             <div class="registration-form" id="registrationFormStep">
                 <div class="selected-role-badge" id="selectedRoleBadge"></div>
 
-                <div class="alert alert-error" id="errorAlert"></div>
+                <!-- Show error message if there is one -->
+                <?php if (!empty($error)): ?>
+                    <div class="alert alert-error"><?php echo $error; ?></div>
+                <?php endif; ?>
 
-                <form id="registerForm" method="POST" action="process_registration.php">
+                <!-- Show success message if registration worked -->
+                <?php if (!empty($success)): ?>
+                    <div class="alert alert-success"><?php echo $success; ?></div>
+                <?php endif; ?>
+
+                <form id="registerForm" method="POST" action="">
+                    <!-- Hidden field to store selected role -->
                     <input type="hidden" name="role" id="selectedRole">
 
+                    <!-- First Name and Last Name -->
                     <div class="form-row">
                         <div class="form-group">
                             <label for="firstName">First Name *</label>
-                            <input type="text" id="firstName" name="first_name" placeholder="Enter first name" required>
+                            <input type="text" id="firstName" name="first_name" placeholder="Enter first name" value="<?php echo isset($_POST['first_name']) ? $_POST['first_name'] : ''; ?>" required>
                         </div>
 
                         <div class="form-group">
                             <label for="lastName">Last Name *</label>
-                            <input type="text" id="lastName" name="last_name" placeholder="Enter last name" required>
+                            <input type="text" id="lastName" name="last_name" placeholder="Enter last name" value="<?php echo isset($_POST['last_name']) ? $_POST['last_name'] : ''; ?>" required>
                         </div>
                     </div>
 
+                    <!-- Email -->
                     <div class="form-group">
                         <label for="email">Email Address *</label>
-                        <input type="email" id="email" name="email" placeholder="Enter your email" required>
+                        <input type="email" id="email" name="email" placeholder="Enter your email" value="<?php echo isset($_POST['email']) ? $_POST['email'] : ''; ?>" required>
                     </div>
 
+                    <!-- Phone and Organization -->
                     <div class="form-row" id="contactOrgRow">
                         <div class="form-group">
                             <label for="phone">Phone Number</label>
-                            <input type="tel" id="phone" name="phone" placeholder="Enter phone number">
+                            <input type="tel" id="phone" name="phone" placeholder="Enter phone number" value="<?php echo isset($_POST['phone']) ? $_POST['phone'] : ''; ?>">
                         </div>
 
                         <div class="form-group" id="organizationGroup">
                             <label for="organization">Organization</label>
-                            <input type="text" id="organization" name="organization" placeholder="Enter organization">
+                            <input type="text" id="organization" name="organization" placeholder="Enter organization" value="<?php echo isset($_POST['organization']) ? $_POST['organization'] : ''; ?>">
                         </div>
                     </div>
 
+                    <!-- Password and Confirm Password -->
                     <div class="form-row">
                         <div class="form-group">
                             <label for="password">Password *</label>
@@ -592,13 +722,7 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="checkbox" name="terms" id="terms" required>
-                            <span>I agree to the Terms and Conditions</span>
-                        </label>
-                    </div>
-
+                    <!-- Back and Submit Buttons -->
                     <div class="form-actions">
                         <button type="button" class="btn-back" onclick="backToRoleSelection()">
                             ← Back
@@ -617,28 +741,54 @@
     </div>
 
     <script>
+        // Variable to remember which role was selected
         let selectedRoleValue = '';
 
-        function selectRole(role) {
-            // Remove selected class from all cards
-            document.querySelectorAll('.role-card').forEach(card => {
-                card.classList.remove('selected');
-            });
+        <?php if (!empty($error) && isset($_POST['role'])): ?>
+        // If there was an error after submitting, show the form again with the selected role
+        window.addEventListener('DOMContentLoaded', function() {
+            selectedRoleValue = '<?php echo $_POST['role']; ?>';
+            document.getElementById('roleSelectionStep').style.display = 'none';
+            document.getElementById('registrationFormStep').style.display = 'block';
+            document.getElementById('selectedRole').value = selectedRoleValue;
+            
+            // Show role badge at top
+            var roleName = selectedRoleValue.charAt(0).toUpperCase() + selectedRoleValue.slice(1);
+            var roleIcon = selectedRoleValue === 'attendee' ? '👤' : '👨‍💼';
+            document.getElementById('selectedRoleBadge').textContent = roleIcon + ' ' + roleName;
+            
+            // Hide organization field if attendee
+            if (selectedRoleValue === 'attendee') {
+                document.getElementById('organizationGroup').style.display = 'none';
+            }
+        });
+        <?php endif; ?>
 
-            // Add selected class to clicked card
+        // Function when user clicks on a role card
+        function selectRole(role) {
+            // Remove highlight from all cards
+            var allCards = document.querySelectorAll('.role-card');
+            for (var i = 0; i < allCards.length; i++) {
+                allCards[i].classList.remove('selected');
+            }
+
+            // Highlight the clicked card
             event.currentTarget.classList.add('selected');
 
             // Check the radio button
-            document.getElementById('role' + role.charAt(0).toUpperCase() + role.slice(1)).checked = true;
+            var roleId = 'role' + role.charAt(0).toUpperCase() + role.slice(1);
+            document.getElementById(roleId).checked = true;
 
-            // Store selected role
+            // Remember the selected role
             selectedRoleValue = role;
 
-            // Enable continue button
+            // Enable the continue button
             document.getElementById('btnContinue').disabled = false;
         }
 
+        // Function when user clicks "Continue to Registration"
         function continueToForm() {
+            // Make sure a role was selected
             if (!selectedRoleValue) {
                 alert('Please select a role');
                 return;
@@ -648,16 +798,16 @@
             document.getElementById('roleSelectionStep').style.display = 'none';
             document.getElementById('registrationFormStep').style.display = 'block';
 
-            // Update hidden input and badge
+            // Set the hidden role field
             document.getElementById('selectedRole').value = selectedRoleValue;
-            const roleName = selectedRoleValue.charAt(0).toUpperCase() + selectedRoleValue.slice(1);
-            const roleIcon = selectedRoleValue === 'attendee' ? '👤' : '👨‍💼';
+            
+            // Show role badge at top of form
+            var roleName = selectedRoleValue.charAt(0).toUpperCase() + selectedRoleValue.slice(1);
+            var roleIcon = selectedRoleValue === 'attendee' ? '👤' : '👨‍💼';
             document.getElementById('selectedRoleBadge').textContent = roleIcon + ' ' + roleName;
 
-            // Hide organization field for attendees
-            const orgGroup = document.getElementById('organizationGroup');
-            const contactOrgRow = document.getElementById('contactOrgRow');
-            
+            // Hide organization field if user is an attendee
+            var orgGroup = document.getElementById('organizationGroup');
             if (selectedRoleValue === 'attendee') {
                 orgGroup.style.display = 'none';
             } else {
@@ -665,74 +815,65 @@
             }
         }
 
+        // Function when user clicks "Back" button
         function backToRoleSelection() {
             document.getElementById('roleSelectionStep').style.display = 'block';
             document.getElementById('registrationFormStep').style.display = 'none';
-            document.getElementById('errorAlert').style.display = 'none';
         }
 
-        // Form validation
+        // Validate form before submitting
         document.getElementById('registerForm').addEventListener('submit', function(e) {
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
-            const email = document.getElementById('email').value;
-            const terms = document.getElementById('terms').checked;
-            const errorAlert = document.getElementById('errorAlert');
+            var password = document.getElementById('password').value;
+            var confirmPassword = document.getElementById('confirmPassword').value;
+            var email = document.getElementById('email').value;
 
             // Check if passwords match
             if (password !== confirmPassword) {
                 e.preventDefault();
-                errorAlert.textContent = 'Passwords do not match';
-                errorAlert.style.display = 'block';
+                alert('Passwords do not match');
                 return false;
             }
 
-            // Password strength validation
+            // Check password length
             if (password.length < 8) {
                 e.preventDefault();
-                errorAlert.textContent = 'Password must be at least 8 characters';
-                errorAlert.style.display = 'block';
+                alert('Password must be at least 8 characters');
                 return false;
             }
 
+            // Check if password has uppercase letter
             if (!/[A-Z]/.test(password)) {
                 e.preventDefault();
-                errorAlert.textContent = 'Password must contain at least one uppercase letter';
-                errorAlert.style.display = 'block';
+                alert('Password must contain at least one uppercase letter');
                 return false;
             }
 
+            // Check if password has number
             if (!/[0-9]/.test(password)) {
                 e.preventDefault();
-                errorAlert.textContent = 'Password must contain at least one number';
-                errorAlert.style.display = 'block';
+                alert('Password must contain at least one number');
                 return false;
             }
 
-            // Email validation
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
+            // Check email format
+            var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailPattern.test(email)) {
                 e.preventDefault();
-                errorAlert.textContent = 'Please enter a valid email address';
-                errorAlert.style.display = 'block';
-                return false;
-            }
-
-            // Terms validation
-            if (!terms) {
-                e.preventDefault();
-                errorAlert.textContent = 'Please accept the Terms and Conditions';
-                errorAlert.style.display = 'block';
+                alert('Please enter a valid email address');
                 return false;
             }
         });
 
-        // Hide error on input
-        document.querySelectorAll('input').forEach(input => {
-            input.addEventListener('input', function() {
-                document.getElementById('errorAlert').style.display = 'none';
+        // Hide error message when user starts typing
+        var allInputs = document.querySelectorAll('input');
+        for (var i = 0; i < allInputs.length; i++) {
+            allInputs[i].addEventListener('input', function() {
+                var errorAlert = document.querySelector('.alert-error');
+                if (errorAlert) {
+                    errorAlert.style.display = 'none';
+                }
             });
-        });
+        }
     </script>
 </body>
 </html>

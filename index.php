@@ -1,3 +1,37 @@
+<?php
+// Start session
+session_start();
+
+// Database configuration (update with your actual database credentials)
+$host = 'localhost';
+$dbname = 'event_management';
+$username = 'root';
+$password = '';
+
+// Create database connection
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch(PDOException $e) {
+    // If connection fails, set a flag
+    $db_error = true;
+}
+
+// Fetch events from database
+$events = [];
+if (!isset($db_error)) {
+    try {
+        $stmt = $pdo->query("SELECT * FROM events WHERE status = 'active' ORDER BY event_date ASC");
+        $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch(PDOException $e) {
+        $events = [];
+    }
+}
+
+// Check if user is logged in
+$isLoggedIn = isset($_SESSION['user_id']);
+$userName = $isLoggedIn ? $_SESSION['user_name'] : '';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -61,6 +95,12 @@
         .auth-buttons {
             display: flex;
             gap: 1rem;
+            align-items: center;
+        }
+
+        .user-welcome {
+            color: white;
+            margin-right: 1rem;
         }
 
         .btn {
@@ -224,6 +264,7 @@
             border-radius: 20px;
             font-size: 0.85rem;
             margin-bottom: 0.5rem;
+            text-transform: capitalize;
         }
 
         .event-title {
@@ -273,40 +314,17 @@
             cursor: not-allowed;
         }
 
-        /* Features Section */
-        .features {
-            background: #f8f8f8;
-            padding: 4rem 2rem;
-        }
-
-        .features-container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin-top: 2rem;
-        }
-
-        .feature-card {
-            background: white;
-            padding: 2rem;
-            border-radius: 10px;
+        .no-events-message {
+            grid-column: 1 / -1;
             text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 3rem;
+            background: #f8f8f8;
+            border-radius: 10px;
         }
 
-        .feature-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-
-        .feature-card h3 {
+        .no-events-message h3 {
             color: #667eea;
-            margin-bottom: 0.5rem;
+            margin-bottom: 1rem;
         }
 
         /* Contact Section */
@@ -435,7 +453,6 @@
 
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
-            /* Navigation */
             nav {
                 padding: 0 1rem;
                 flex-wrap: wrap;
@@ -474,15 +491,6 @@
                 justify-content: center;
             }
 
-            .auth-buttons.mobile-hidden {
-                display: none;
-            }
-
-            .auth-buttons.mobile-visible {
-                display: flex;
-            }
-
-            /* Hero */
             .hero {
                 padding: 3rem 1rem;
             }
@@ -495,7 +503,6 @@
                 font-size: 1rem;
             }
 
-            /* Sections */
             .events-section {
                 margin: 2rem auto;
                 padding: 0 1rem;
@@ -505,167 +512,23 @@
                 font-size: 1.8rem;
             }
 
-            .section-header p {
-                font-size: 1rem;
-            }
-
-            /* Event Filters */
             .event-filters {
                 flex-direction: column;
             }
 
-            .filter-input,
-            .filter-select {
-                width: 100%;
-                min-width: auto;
-            }
-
-            /* Event Grid */
             .events-grid {
                 grid-template-columns: 1fr;
                 gap: 1.5rem;
-            }
-
-            /* Features */
-            .features {
-                padding: 2rem 1rem;
-            }
-
-            .features-grid {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-
-            .feature-card {
-                padding: 1.5rem;
-            }
-
-            .feature-icon {
-                font-size: 2.5rem;
-            }
-
-            /* Contact Section */
-            .contact-section {
-                margin: 2rem auto;
-                padding: 0 1rem;
             }
 
             .contact-container {
                 grid-template-columns: 1fr;
                 gap: 2rem;
             }
-
-            .contact-info,
-            .contact-form {
-                padding: 1.5rem;
-            }
         }
 
-        /* Tablet Responsive Styles */
-        @media (min-width: 769px) and (max-width: 1024px) {
-            nav {
-                padding: 0 1.5rem;
-            }
-
-            .hero h1 {
-                font-size: 2.5rem;
-            }
-
-            .events-grid {
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                gap: 1.5rem;
-            }
-
-            .features-grid {
-                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            }
-        }
-
-        /* Small Desktop */
-        @media (min-width: 1025px) and (max-width: 1280px) {
-            .events-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-
-        /* Extra Small Mobile */
-        @media (max-width: 480px) {
-            .logo {
-                font-size: 1rem;
-            }
-
-            .btn {
-                padding: 0.4rem 1rem;
-                font-size: 0.9rem;
-            }
-
-            .hero {
-                padding: 2rem 1rem;
-            }
-
-            .hero h1 {
-                font-size: 1.5rem;
-            }
-
-            .hero p {
-                font-size: 0.9rem;
-            }
-
-            .section-header h2 {
-                font-size: 1.5rem;
-            }
-
-            .event-image {
-                height: 150px;
-                font-size: 2.5rem;
-            }
-
-            .event-content {
-                padding: 1rem;
-            }
-
-            .event-title {
-                font-size: 1.1rem;
-            }
-        }
-
-        /* Smooth scrolling */
         html {
             scroll-behavior: smooth;
-        }
-
-        /* Touch device hover adjustments */
-        @media (hover: none) {
-            .event-card:hover {
-                transform: none;
-            }
-
-            .btn-primary:hover,
-            .btn-register:hover {
-                transform: none;
-            }
-
-            .btn-secondary:hover {
-                background: transparent;
-                color: white;
-            }
-        }
-
-        /* Touch device hover adjustments */
-        @media (hover: none) {
-            .event-card:hover {
-                transform: none;
-            }
-
-            .btn-primary:hover,
-            .btn-register:hover {
-                transform: none;
-            }
-
-            .btn-secondary:hover {
-                background: transparent;
-                color: white;
-            }
         }
     </style>
 </head>
@@ -685,8 +548,13 @@
                 <li><a href="#contact">Contact</a></li>
             </ul>
             <div class="auth-buttons" id="authButtons">
-                <a href="login.php" class="btn btn-secondary">Login</a>
-                <a href="register.php" class="btn btn-primary">Sign Up</a>
+                <?php if ($isLoggedIn): ?>
+                    <span class="user-welcome">Welcome, <?php echo htmlspecialchars($userName); ?>!</span>
+                    <a href="logout.php" class="btn btn-secondary">Logout</a>
+                <?php else: ?>
+                    <a href="login.php" class="btn btn-secondary">Login</a>
+                    <a href="register.php" class="btn btn-primary">Sign Up</a>
+                <?php endif; ?>
             </div>
         </nav>
     </header>
@@ -724,14 +592,45 @@
 
         <!-- Events Grid -->
         <div class="events-grid" id="eventsGrid">
-            <!-- Events will be dynamically loaded here -->
-            
-            <!-- No Events Message -->
-            <div class="no-events-message" id="noEventsMessage">
-                <h3>No Events Available</h3>
-                <p>There are currently no events matching your criteria. Please check back later or adjust your filters.</p>
-            </div>
+            <?php if (empty($events)): ?>
+                <div class="no-events-message">
+                    <h3>No Events Available</h3>
+                    <p>There are currently no events matching your criteria. Please check back later or adjust your filters.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($events as $event): ?>
+                    <?php
+                    $registered = isset($event['registered_count']) ? $event['registered_count'] : 0;
+                    $capacity = isset($event['capacity']) ? $event['capacity'] : 0;
+                    $isFull = $registered >= $capacity;
+                    ?>
+                    <div class="event-card" data-type="<?php echo htmlspecialchars($event['event_type']); ?>" data-date="<?php echo htmlspecialchars($event['event_date']); ?>">
+                        <div class="event-image">
+                            📅
+                        </div>
+                        <div class="event-content">
+                            <span class="event-type"><?php echo htmlspecialchars($event['event_type']); ?></span>
+                            <h3 class="event-title"><?php echo htmlspecialchars($event['title']); ?></h3>
+                            <div class="event-details">
+                                <div class="event-detail-item">📅 <?php echo date('F j, Y', strtotime($event['event_date'])); ?></div>
+                                <div class="event-detail-item">🕒 <?php echo date('g:i A', strtotime($event['event_time'])); ?></div>
+                                <div class="event-detail-item">📍 <?php echo htmlspecialchars($event['location']); ?></div>
+                            </div>
+                            <div class="event-capacity">
+                                <span>Available Slots</span>
+                                <span><strong><?php echo $capacity - $registered; ?></strong> / <?php echo $capacity; ?></span>
+                            </div>
+                            <button class="btn-register" 
+                                    data-event-id="<?php echo $event['id']; ?>"
+                                    <?php echo $isFull ? 'disabled' : ''; ?>>
+                                <?php echo $isFull ? 'Event Full' : 'Register Now'; ?>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
+    </section>
 
     <!-- Contact Section -->
     <section class="contact-section" id="contact">
@@ -787,7 +686,7 @@
             <!-- Contact Form -->
             <div class="contact-form">
                 <h3>Send us a Message</h3>
-                <form id="contactForm">
+                <form id="contactForm" method="POST" action="contact_handler.php">
                     <div class="form-group">
                         <label for="name">Full Name</label>
                         <input type="text" id="name" name="name" required>
@@ -824,7 +723,6 @@
         // Mobile menu toggle
         const menuToggle = document.getElementById('menuToggle');
         const navLinks = document.getElementById('navLinks');
-        const authButtons = document.getElementById('authButtons');
 
         menuToggle.addEventListener('click', function() {
             navLinks.classList.toggle('active');
@@ -837,60 +735,46 @@
             });
         });
 
-        // Simple search functionality
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', filterEvents);
+        document.getElementById('typeFilter').addEventListener('change', filterEvents);
+        document.getElementById('dateFilter').addEventListener('change', filterEvents);
+
+        function filterEvents() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const typeFilter = document.getElementById('typeFilter').value.toLowerCase();
             const eventCards = document.querySelectorAll('.event-card');
             
             eventCards.forEach(card => {
                 const title = card.querySelector('.event-title').textContent.toLowerCase();
-                if (title.includes(searchTerm)) {
+                const type = card.dataset.type.toLowerCase();
+                
+                const matchesSearch = title.includes(searchTerm);
+                const matchesType = typeFilter === '' || type === typeFilter;
+                
+                if (matchesSearch && matchesType) {
                     card.style.display = 'block';
                 } else {
                     card.style.display = 'none';
                 }
             });
-        });
-
-        // Type filter functionality
-        document.getElementById('typeFilter').addEventListener('change', function(e) {
-            const filterValue = e.target.value.toLowerCase();
-            const eventCards = document.querySelectorAll('.event-card');
-            
-            eventCards.forEach(card => {
-                const type = card.querySelector('.event-type').textContent.toLowerCase();
-                if (filterValue === '' || type === filterValue) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-        });
+        }
 
         // Register button click handler
         document.querySelectorAll('.btn-register').forEach(button => {
             button.addEventListener('click', function() {
                 if (!this.disabled) {
-                    alert('Please login or sign up to register for this event.');
-                    window.location.href = 'login.php';
+                    const eventId = this.dataset.eventId;
+                    <?php if ($isLoggedIn): ?>
+                        // If logged in, redirect to registration page
+                        window.location.href = 'register_event.php?event_id=' + eventId;
+                    <?php else: ?>
+                        // If not logged in, redirect to login
+                        alert('Please login or sign up to register for this event.');
+                        window.location.href = 'login.php';
+                    <?php endif; ?>
                 }
             });
-        });
-
-        // Contact form submission
-        document.getElementById('contactForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const name = document.getElementById('name').value;
-            const email = document.getElementById('email').value;
-            const subject = document.getElementById('subject').value;
-            const message = document.getElementById('message').value;
-            
-            // Simulate form submission
-            alert(`Thank you, ${name}! Your message has been sent successfully.\n\nWe'll respond to ${email} within 24-48 hours.`);
-            
-            // Reset form
-            this.reset();
         });
     </script>
 </body>
