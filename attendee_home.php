@@ -1,96 +1,211 @@
 <?php
-session_start();
+    session_start();
 
-if(!isset($_SESSION['user_id']) || $_SESSION['role'] != 'attendee'){
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'attendee') {
     header("Location: login.php");
     exit();
 }
 
 $username = $_SESSION['username'] ?? 'Guest';
 
-// Database connection should be included here
-// include 'db_connection.php';
+// DB connection
+$dsn = 'mysql:host=localhost;dbname=event_management;charset=utf8mb4';
+$dbUser = 'root';
+$dbPass = '';
 
-// Fetch events from database
-// $stmt = $pdo->query("SELECT * FROM events WHERE status = 'active' ORDER BY event_date ASC");
-// $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$events = []; // Replace with actual database query
+// helper: deterministic ticket id generator (registration_id + event_id -> stable token)
+function format_ticket_id($registrationId, $eventId) {
+    $registrationId = intval($registrationId);
+    $eventId = intval($eventId);
+    $hash = strtoupper(substr(md5($eventId . '-' . $registrationId), 0, 6));
+    return "TKT-{$eventId}-{$registrationId}-{$hash}";
+}
 
-// Handle AJAX requests
+try {
+    $pdo = new PDO($dsn, $dbUser, $dbPass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+    ]);
+} catch (PDOException $e) {
+    die('Database connection failed: ' . $e->getMessage());
+}
+
+// Read events and compute registered count & available slots
+$sql = "
+SELECT e.*,
+       COALESCE(r.registered,0) AS registered,
+       (e.capacity - COALESCE(r.registered,0)) AS available
+FROM events e
+LEFT JOIN (
+    SELECT event_id, COUNT(*) AS registered
+    FROM registrations
+    WHERE status = 'confirmed'
+    GROUP BY event_id
+) r ON e.id = r.event_id
+WHERE e.status = 'active'
+ORDER BY e.created_at ASC
+";
+$events = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+
+// Handle AJAX register/cancel (use transactions)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
-    
-    if (!isset($_SESSION['registrations'])) {
-        $_SESSION['registrations'] = [];
-    }
-    
+    $userId = intval($_SESSION['user_id'] ?? 0);
+    if (!$userId) { echo json_encode(['success'=>false,'message'=>'Not authenticated']); exit(); }
+
     switch ($_POST['action']) {
         case 'register':
             $eventId = intval($_POST['eventId']);
-            // Add database logic to register user for event
-            // Check if event exists and has available slots
-            // Insert into registrations table
-            // Update available slots
-            
-            $event = null;
-            foreach ($events as $e) {
-                if ($e['id'] == $eventId) {
-                    $event = $e;
-                    break;
+            try {
+                $pdo->beginTransaction();
+                // check available
+                $stmt = $pdo->prepare("SELECT e.capacity, COALESCE(r.registered,0) AS registered, (e.capacity - COALESCE(r.registered,0)) AS available
+                                       FROM events e
+                                       LEFT JOIN (
+                                         SELECT event_id, COUNT(*) AS registered FROM registrations WHERE status='confirmed' GROUP BY event_id
+                                       ) r ON e.id = r.event_id
+                                       WHERE e.id = :id FOR UPDATE");
+                $stmt->execute([':id'=>$eventId]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$row || intval($row['available']) <= 0) {
+                    $pdo->rollBack();
+                    echo json_encode(['success'=>false,'message'=>'No available slots']);
+                    exit();
                 }
-            }
-            
-            if ($event && !in_array($eventId, $_SESSION['registrations'])) {
-                $_SESSION['registrations'][] = $eventId;
-                echo json_encode(['success' => true, 'message' => 'Successfully registered!']);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Registration failed']);
+
+                // ensure user not already registered (prevent duplicates)
+                $chk = $pdo->prepare("SELECT id FROM registrations WHERE user_id = :uid AND event_id = :eid AND status = 'confirmed' LIMIT 1");
+                $chk->execute([':uid'=>$userId, ':eid'=>$eventId]);
+                if ($chk->fetch()) {
+                    $pdo->rollBack();
+                    echo json_encode(['success'=>false,'message'=>'Already registered for this event']);
+                    exit();
+                }
+
+                // insert registration
+                $ins = $pdo->prepare("INSERT INTO registrations (user_id,event_id,status) VALUES (:uid,:eid,'confirmed')");
+                $ins->execute([':uid'=>$userId,':eid'=>$eventId]);
+                $pdo->commit();
+                echo json_encode(['success'=>true,'message'=>'Successfully registered!']);
+            } catch (Exception $ex) {
+                $pdo->rollBack();
+                echo json_encode(['success'=>false,'message'=>'Registration failed']);
             }
             exit();
-            
+
         case 'cancel':
             $eventId = intval($_POST['eventId']);
-            // Add database logic to cancel registration
-            // Delete from registrations table
-            // Update available slots
-            
-            $_SESSION['registrations'] = array_filter($_SESSION['registrations'], function($id) use ($eventId) {
-                return $id != $eventId;
-            });
-            echo json_encode(['success' => true, 'message' => 'Registration cancelled']);
+            $stmt = $pdo->prepare("UPDATE registrations SET status='cancelled' WHERE user_id=:uid AND event_id=:eid AND status='confirmed' LIMIT 1");
+            $stmt->execute([':uid'=>$userId,':eid'=>$eventId]);
+            if ($stmt->rowCount() > 0) {
+                echo json_encode(['success'=>true,'message'=>'Registration cancelled']);
+            } else {
+                echo json_encode(['success'=>false,'message'=>'No active registration found']);
+            }
             exit();
     }
+}
+
+// === Profile update / avatar upload handler ===
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['profile_action']) && $_POST['profile_action'] === 'save_profile') {
+    $userId = intval($_SESSION['user_id'] ?? 0);
+    if (!$userId) {
+        $_SESSION['profile_error'] = 'Not authenticated';
+        header('Location: ' . $_SERVER['REQUEST_URI']);
+        exit();
+    }
+
+    // Ensure upload directory exists
+    $uploadDir = __DIR__ . '/uploads/avatars';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+
+    // handle avatar file if provided
+    if (!empty($_FILES['avatar']) && $_FILES['avatar']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $file = $_FILES['avatar'];
+
+        // basic validations
+        $allowedTypes = ['image/jpeg','image/png','image/gif'];
+        $maxSize = 2 * 1024 * 1024; // 2MB
+
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            $_SESSION['profile_error'] = 'File upload error';
+        } elseif (!in_array(mime_content_type($file['tmp_name']), $allowedTypes, true)) {
+            $_SESSION['profile_error'] = 'Allowed types: JPG, PNG, GIF';
+        } elseif ($file['size'] > $maxSize) {
+            $_SESSION['profile_error'] = 'File too large (max 2MB)';
+        } else {
+            $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $safeName = 'avatar_' . $userId . '_' . time() . '.' . $ext;
+            $target = $uploadDir . '/' . $safeName;
+
+            if (move_uploaded_file($file['tmp_name'], $target)) {
+                // update DB users.avatar if column exists, else store in session
+                try {
+                    $stmt = $pdo->prepare("UPDATE users SET avatar = :avatar WHERE id = :uid");
+                    $stmt->execute([':avatar' => $safeName, ':uid' => $userId]);
+                    $_SESSION['avatar'] = $safeName;
+                    $_SESSION['profile_success'] = 'Profile photo updated';
+                } catch (Exception $e) {
+                    // fallback: keep filename in session
+                    $_SESSION['avatar'] = $safeName;
+                    $_SESSION['profile_success'] = 'Profile photo uploaded (DB update failed)';
+                }
+            } else {
+                $_SESSION['profile_error'] = 'Failed to move uploaded file';
+            }
+        }
+    } else {
+        // no file uploaded — optionally handle other profile fields here
+        $_SESSION['profile_error'] = 'No file selected';
+    }
+
+    // redirect to avoid resubmission
+    header('Location: ' . $_SERVER['REQUEST_URI']);
+    exit();
 }
 
 // Get current tab
 $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'dashboard';
 
-// Initialize registrations if not set
-if (!isset($_SESSION['registrations'])) {
-    $_SESSION['registrations'] = [];
+// --- replaced session-based registrations with DB-backed fetch ---
+
+// Fetch registered events from database for this user
+$userId = intval($_SESSION['user_id'] ?? 0);
+if ($userId) {
+    $stmt = $pdo->prepare("
+        SELECT e.*, r.id AS registration_id, r.created_at AS reg_created
+        FROM events e
+        INNER JOIN registrations r ON e.id = r.event_id
+        WHERE r.user_id = :uid AND r.status = 'confirmed'
+        ORDER BY r.created_at DESC
+    ");
+    $stmt->execute([':uid' => $userId]);
+    $registeredEvents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // list of event ids the user registered to
+    $registeredEventIds = array_map(function($r){ return intval($r['id']); }, $registeredEvents);
+} else {
+    $registeredEvents = [];
+    $registeredEventIds = [];
 }
 
-// Fetch registered events from database
-// $stmt = $pdo->prepare("SELECT e.* FROM events e 
-//                        INNER JOIN registrations r ON e.id = r.event_id 
-//                        WHERE r.user_id = ? ORDER BY e.event_date ASC");
-// $stmt->execute([$_SESSION['user_id']]);
-// $registeredEvents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$registeredEvents = array_filter($events, function($event) {
-    return in_array($event['id'], $_SESSION['registrations']);
-});
+// Announcements feature removed — no DB fetch here
 
-// Fetch announcements from database
-// $stmt = $pdo->query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 10");
-// $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$announcements = []; // Replace with actual database query
-
-// Get statistics
-$availableEventsCount = count(array_filter($events, function($e) { 
-    return isset($e['available']) && $e['available'] > 0; 
-}));
+// Counts used in the UI
 $myRegistrationsCount = count($registeredEvents);
-$newAnnouncementsCount = count($announcements);
+
+// Available events count = active events with available slots that the user hasn't registered to
+$availableEventsCount = 0;
+foreach ($events as $ev) {
+    $evId = intval($ev['id'] ?? 0);
+    $available = intval($ev['available'] ?? (intval($ev['capacity'] ?? 0) - intval($ev['registered'] ?? 0)));
+    $isRegistered = in_array($evId, $registeredEventIds, true);
+    if (($ev['status'] ?? 'active') === 'active' && !$isRegistered && $available > 0) {
+        $availableEventsCount++;
+    }
+}
+
+$newAnnouncementsCount = 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -518,6 +633,12 @@ $newAnnouncementsCount = count($announcements);
         }
 
         .capacity-info strong {
+            color: #667eea;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #f0f0f0;
             color: #667eea;
         }
 
@@ -1401,9 +1522,6 @@ $newAnnouncementsCount = count($announcements);
                 <a href="?tab=tickets" class="nav-item <?php echo $activeTab == 'tickets' ? 'active' : ''; ?>">
                     <span>My Tickets</span>
                 </a>
-                <a href="?tab=announcements" class="nav-item <?php echo $activeTab == 'announcements' ? 'active' : ''; ?>">
-                    <span>Announcements</span>
-                </a>
                 <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>">
                     <span>Edit Profile</span>
                 </a>
@@ -1428,7 +1546,6 @@ $newAnnouncementsCount = count($announcements);
                         case 'events': echo 'Browse Events'; break;
                         case 'registrations': echo 'My Registrations'; break;
                         case 'tickets': echo 'My Tickets'; break;
-                        case 'announcements': echo 'Announcements'; break;
                         case 'profile': echo 'Edit Profile'; break;
                         default: echo 'Dashboard';
                     }
@@ -1473,13 +1590,6 @@ $newAnnouncementsCount = count($announcements);
                             <p>Confirmed Tickets</p>
                         </div>
                     </div>
-                    <div class="stat-card orange">
-                        <div class="stat-icon">📢</div>
-                        <div class="stat-info">
-                            <h3><?php echo $newAnnouncementsCount; ?></h3>
-                            <p>New Announcements</p>
-                        </div>
-                    </div>
                 </div>
 
                 <div class="quick-actions">
@@ -1499,11 +1609,6 @@ $newAnnouncementsCount = count($announcements);
                             <div class="action-card-icon">🎟️</div>
                             <h4>My Tickets</h4>
                             <p>Access your tickets</p>
-                        </a>
-                        <a href="?tab=announcements" class="action-card">
-                            <div class="action-card-icon">📣</div>
-                            <h4>Announcements</h4>
-                            <p>Stay updated</p>
                         </a>
                     </div>
                 </div>
@@ -1537,7 +1642,7 @@ $newAnnouncementsCount = count($announcements);
                 <?php else: ?>
                     <div class="events-grid" id="eventsGrid">
                         <?php foreach ($events as $event): 
-                            $isRegistered = in_array($event['id'], $_SESSION['registrations']);
+                            $isRegistered = in_array($event['id'], $registeredEventIds);
                             $isFull = $event['available'] == 0;
                             $eventType = $event['type'] ?? 'Event';
                             $gradientColor = $eventType == 'Conference' ? 'linear-gradient(135deg, #667eea, #764ba2)' :
@@ -1697,42 +1802,10 @@ $newAnnouncementsCount = count($announcements);
                                     </div>
                                     <div class="ticket-detail">
                                         <span class="label">Ticket ID</span>
-                                        <span class="value">TKT-<?php echo $event['id']; ?>0<?php echo rand(100, 999); ?></span>
+                                        <span class="value"><?php echo format_ticket_id($event['registration_id'] ?? $event['id'], $event['id']); ?></span>
                                     </div>
                                 </div>
                                 <button class="btn-download" onclick="alert('Ticket download feature coming soon!')">Download Ticket</button>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-
-            <?php elseif ($activeTab == 'announcements'): ?>
-                <!-- Announcements -->
-                <div class="page-header">
-                    <h2>Announcements</h2>
-                    <p>Stay updated with the latest news and updates</p>
-                </div>
-
-                <?php if (count($announcements) == 0): ?>
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📢</div>
-                        <h3>No Announcements</h3>
-                        <p>There are currently no announcements to display.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="announcements-list">
-                        <?php foreach ($announcements as $announcement): ?>
-                            <div class="announcement-card">
-                                <div class="announcement-icon <?php echo ($announcement['is_new'] ?? false) ? 'new' : ''; ?>">
-                                    <?php echo $announcement['icon'] ?? 'ℹ️'; ?>
-                                </div>
-                                <div class="announcement-content">
-                                    <div class="announcement-header">
-                                        <h3><?php echo htmlspecialchars($announcement['title'] ?? 'Announcement'); ?></h3>
-                                        <span class="announcement-date"><?php echo htmlspecialchars($announcement['date'] ?? ''); ?></span>
-                                    </div>
-                                    <p><?php echo htmlspecialchars($announcement['content'] ?? ''); ?></p>
-                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -1750,10 +1823,30 @@ $newAnnouncementsCount = count($announcements);
                         <div class="avatar-circle">
                             <?php echo substr($username, 0, 1); ?>
                         </div>
-                        <button class="btn-change-avatar" onclick="alert('Photo upload feature coming soon!')">Change Photo</button>
+
+                        <?php
+                            // prefer DB/session avatar filename if available
+                            $avatarFile = $_SESSION['avatar'] ?? '';
+                            // if you store avatar in DB and fetched $user earlier, prefer $user['avatar']
+                            if (!empty($user['avatar'])) $avatarFile = $user['avatar'] ?? $avatarFile;
+                        ?>
+
+                        <?php if ($avatarFile): ?>
+                            <div style="text-align:center;margin:10px 0;">
+                                <img src="uploads/avatars/<?php echo htmlspecialchars($avatarFile); ?>"
+                                     alt="avatar"
+                                     style="width:120px;height:120px;border-radius:50%;object-fit:cover;">
+                            </div>
+                        <?php endif; ?>
                     </div>
 
-                    <form class="profile-form" method="POST" action="">
+                    <form class="profile-form" method="POST" action="" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label>Profile Photo</label>
+                            <input type="file" name="avatar" accept="image/jpeg,image/png,image/gif">
+                            <input type="hidden" name="profile_action" value="save_profile">
+                        </div>
+
                         <div class="form-group">
                             <label>Full Name</label>
                             <input type="text" name="fullname" value="<?php echo htmlspecialchars($username); ?>">
@@ -1777,7 +1870,6 @@ $newAnnouncementsCount = count($announcements);
                         <button type="submit" class="btn-save">Save Changes</button>
                     </form>
                 </div>
-
             <?php endif; ?>
         </main>
     </div>
@@ -1793,7 +1885,6 @@ $newAnnouncementsCount = count($announcements);
             overlay.classList.toggle('active');
             menuBtn.classList.toggle('active');
             
-            // Update button icon
             if (sidebar.classList.contains('active')) {
                 menuBtn.innerHTML = '✕';
             } else {
@@ -1828,9 +1919,7 @@ $newAnnouncementsCount = count($announcements);
         function filterEvents() {
             const searchInput = document.getElementById('searchInput');
             const typeFilter = document.getElementById('typeFilter');
-            
             if (!searchInput || !typeFilter) return;
-            
             const searchTerm = searchInput.value.toLowerCase();
             const typeValue = typeFilter.value;
             const eventCards = document.querySelectorAll('.event-card');
@@ -1838,43 +1927,65 @@ $newAnnouncementsCount = count($announcements);
             eventCards.forEach(card => {
                 const title = card.getAttribute('data-title') || '';
                 const type = card.getAttribute('data-type') || '';
-                
                 const matchesSearch = title.includes(searchTerm);
                 const matchesType = typeValue === '' || type === typeValue;
-
-                if (matchesSearch && matchesType) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
+                card.style.display = (matchesSearch && matchesType) ? 'block' : 'none';
             });
         }
 
         // Register for event
         function registerEvent(eventId) {
-            if (confirm('Are you sure you want to register for this event?')) {
-                const formData = new FormData();
-                formData.append('action', 'register');
-                formData.append('eventId', eventId);
+            if (!confirm('Are you sure you want to register for this event?')) return;
 
-                fetch('', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        location.reload();
-                    } else {
-                        alert('Cancellation failed');
-                    }
-                })
-                .catch(error => {
-                    alert('An error occurred. Please try again.');
-                    console.error('Error:', error);
-                });
-            }
+            const formData = new FormData();
+            formData.append('action', 'register');
+            formData.append('eventId', eventId);
+
+            fetch('', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Registration failed: ' + (data.message || 'Please try again.'));
+                }
+            })
+            .catch(error => {
+                alert('An error occurred. Please try again.');
+                console.error('Error:', error);
+            });
+        }
+
+        // Cancel registration (removes user's confirmed registration for the event)
+        function cancelRegistration(eventId) {
+            if (!confirm('Are you sure you want to cancel this registration?')) return;
+
+            const formData = new FormData();
+            formData.append('action', 'cancel');
+            formData.append('eventId', eventId);
+
+            fetch('', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    // reload so event moves from "My Registrations" back to available list
+                    location.reload();
+                } else {
+                    alert('Cancellation failed: ' + (data.message || 'Please try again.'));
+                }
+            })
+            .catch(error => {
+                alert('An error occurred. Please try again.');
+                console.error('Error:', error);
+            });
         }
     </script>
 </body>

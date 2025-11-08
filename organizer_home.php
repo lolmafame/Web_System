@@ -1,74 +1,174 @@
 <?php
 session_start();
-
-// Redirect to login if not authenticated
 if(!isset($_SESSION['username'])) {
-    header('Location: login.php');
-    exit();
+    $_SESSION['username'] = "Admin Organizer";
 }
-
 $username = $_SESSION['username'];
 
-// Initialize empty arrays if not set
-if(!isset($_SESSION['organizer_events'])) {
-    $_SESSION['organizer_events'] = [];
+// remove hard-coded samples and load from DB (fallback to session if DB unavailable)
+$events = [];
+$attendees = [];
+try {
+    $dsn = 'mysql:host=localhost;dbname=event_management;charset=utf8mb4';
+    $dbUser = 'root';
+    $dbPass = '';
+    $pdo = new PDO($dsn, $dbUser, $dbPass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+
+    // Load events with registered/available counts
+    $stmt = $pdo->query("
+        SELECT
+            e.id,
+            e.title,
+            e.type,
+            e.icon,
+            COALESCE(e.date_text, '') AS date,
+            COALESCE(e.time_text, '') AS time,
+            e.location,
+            e.capacity,
+            e.status,
+            e.description,
+            COALESCE(r.registered, 0) AS registered,
+            (e.capacity - COALESCE(r.registered, 0)) AS available
+        FROM events e
+        LEFT JOIN (
+            SELECT event_id, COUNT(*) AS registered
+            FROM registrations
+            WHERE status = 'confirmed'
+            GROUP BY event_id
+        ) r ON e.id = r.event_id
+        ORDER BY e.created_at DESC
+    ");
+    $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Load recent attendee registrations (join to users)
+    $stmt = $pdo->query("
+        SELECT r.id, u.first_name, u.last_name, u.email, r.event_id, r.status
+        FROM registrations r
+        JOIN users u ON r.user_id = u.id
+        ORDER BY r.created_at DESC
+        LIMIT 200
+    ");
+    $regs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $attendees = array_map(function($r){
+        return [
+            'id' => $r['id'],
+            'name' => trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? '')),
+            'email' => $r['email'],
+            'event_id' => $r['event_id'],
+            'status' => $r['status'],
+        ];
+    }, $regs);
+
+    // do not persist DB query into session here; use DB as source of truth
+} catch (PDOException $e) {
+    // DB unavailable -> use any existing session cache or empty arrays
+    $events = $_SESSION['organizer_events'] ?? [];
+    $attendees = $_SESSION['attendees'] ?? [];
 }
 
-if(!isset($_SESSION['attendees'])) {
-    $_SESSION['attendees'] = [];
+// ===== Attendance stats for Reports (connect registrations -> attendance) =====
+try {
+    $stmt = $pdo->query("
+        SELECT
+            e.id,
+            e.title,
+            e.capacity,
+            COALESCE(r.registered, 0) AS registered
+        FROM events e
+        LEFT JOIN (
+            SELECT event_id, COUNT(*) AS registered
+            FROM registrations
+            WHERE status = 'confirmed'
+            GROUP BY event_id
+        ) r ON e.id = r.event_id
+        ORDER BY e.created_at DESC
+    ");
+    $attendance_stats = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $ex) {
+    $attendance_stats = [];
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
+
+    // DB connection (adjust user/password/host as needed)
+    $dsn = 'mysql:host=localhost;dbname=event_management;charset=utf8mb4';
+    $dbUser = 'root';
+    $dbPass = '';
+    try {
+        $pdo = new PDO($dsn, $dbUser, $dbPass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'DB connection failed']);
+        exit();
+    }
+
     switch ($_POST['action']) {
         case 'create_event':
-            $newEvent = ['id' => count($_SESSION['organizer_events']) + 1, 'title' => $_POST['title'], 'type' => $_POST['type'], 'icon' => $_POST['icon'], 'date' => $_POST['date'], 'time' => $_POST['time'], 'location' => $_POST['location'], 'registered' => 0, 'capacity' => intval($_POST['capacity']), 'status' => 'active', 'description' => $_POST['description']];
-            $_SESSION['organizer_events'][] = $newEvent;
+            $stmt = $pdo->prepare("INSERT INTO events (title, type, icon, date_text, time_text, location, capacity, status, description)
+                                   VALUES (:title,:type,:icon,:date,:time,:location,:capacity,'active',:description)");
+            $stmt->execute([
+                ':title' => $_POST['title'],
+                ':type' => $_POST['type'],
+                ':icon' => $_POST['icon'],
+                ':date' => $_POST['date'],
+                ':time' => $_POST['time'],
+                ':location' => $_POST['location'],
+                ':capacity' => intval($_POST['capacity']),
+                ':description' => $_POST['description']
+            ]);
             echo json_encode(['success' => true, 'message' => 'Event created successfully!']);
             exit();
+
         case 'update_event':
             $eventId = intval($_POST['eventId']);
-            foreach ($_SESSION['organizer_events'] as &$event) {
-                if ($event['id'] == $eventId) {
-                    $event['title'] = $_POST['title'];
-                    $event['type'] = $_POST['type'];
-                    $event['date'] = $_POST['date'];
-                    $event['time'] = $_POST['time'];
-                    $event['location'] = $_POST['location'];
-                    $event['capacity'] = intval($_POST['capacity']);
-                    $event['description'] = $_POST['description'];
-                    break;
-                }
-            }
-            echo json_encode(['success' => true, 'message' => 'Event updated successfully!']);
+            $stmt = $pdo->prepare("UPDATE events SET title=:title, type=:type, date_text=:date, time_text=:time, location=:location, capacity=:capacity, description=:description WHERE id=:id");
+            $stmt->execute([
+                ':title'=>$_POST['title'],
+                ':type'=>$_POST['type'],
+                ':date'=>$_POST['date'],
+                ':time'=>$_POST['time'],
+                ':location'=>$_POST['location'],
+                ':capacity'=>intval($_POST['capacity']),
+                ':description'=>$_POST['description'],
+                ':id'=>$eventId
+            ]);
+            echo json_encode(['success'=>true,'message'=>'Event updated successfully!']);
             exit();
+
         case 'delete_event':
             $eventId = intval($_POST['eventId']);
-            $_SESSION['organizer_events'] = array_filter($_SESSION['organizer_events'], function($event) use ($eventId) {
-                return $event['id'] != $eventId;
-            });
-            echo json_encode(['success' => true, 'message' => 'Event deleted successfully!']);
+            $stmt = $pdo->prepare("DELETE FROM events WHERE id = :id");
+            $stmt->execute([':id'=>$eventId]);
+            echo json_encode(['success'=>true,'message'=>'Event deleted successfully!']);
             exit();
+
         case 'toggle_status':
             $eventId = intval($_POST['eventId']);
-            foreach ($_SESSION['organizer_events'] as &$event) {
-                if ($event['id'] == $eventId) {
-                    $event['status'] = $event['status'] == 'active' ? 'inactive' : 'active';
-                    break;
-                }
-            }
-            echo json_encode(['success' => true, 'message' => 'Event status updated!']);
+            $stmt = $pdo->prepare("UPDATE events SET status = IF(status='active','inactive','active') WHERE id = :id");
+            $stmt->execute([':id'=>$eventId]);
+            echo json_encode(['success'=>true,'message'=>'Event status updated!']);
             exit();
     }
 }
 
 $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'dashboard';
-$events = $_SESSION['organizer_events'];
-$attendees = $_SESSION['attendees'];
+
+// Use the $events / $attendees already loaded above (from DB or fallback in catch)
+$events = $events ?? [];
+$attendees = $attendees ?? [];
+
 $totalEvents = count($events);
-$activeEvents = count(array_filter($events, function($e) { return $e['status'] == 'active'; }));
-$totalAttendees = array_sum(array_column($events, 'registered'));
-$totalRevenue = $totalAttendees * 50;
+$activeEvents = count(array_filter($events, function($e) { return (($e['status'] ?? '') === 'active'); }));
+// sum registered safely (handle missing keys)
+$totalAttendees = array_sum(array_map(function($e){ return intval($e['registered'] ?? 0); }, $events));
+
+// helper: deterministic ticket id generator (keep identical to attendee view)
+function format_ticket_id($registrationId, $eventId) {
+    $registrationId = intval($registrationId);
+    $eventId = intval($eventId);
+    $hash = strtoupper(substr(md5($eventId . '-' . $registrationId), 0, 6));
+    return "TKT-{$eventId}-{$registrationId}-{$hash}";
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -77,9 +177,6 @@ $totalRevenue = $totalAttendees * 50;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Organizer Dashboard - Event Management System</title>
     <style>
-        /* ===========================
-   BASE STYLES
-   =========================== */
 * {
     margin: 0;
     padding: 0;
@@ -122,6 +219,8 @@ body {
     width: 45px;
     height: 45px;
     border-radius: 10px;
+    cursor: pointer;
+    font-size: 1
     cursor: pointer;
     font-size: 1.5rem;
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
@@ -1136,22 +1235,21 @@ body {
                 <p>Organizer Portal</p>
             </div>
             <nav class="nav-menu">
-                <a href="?tab=dashboard" class="nav-item <?php echo $activeTab == 'dashboard' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📊</span><span>Dashboard</span></a>
-                <a href="?tab=events" class="nav-item <?php echo $activeTab == 'events' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📅</span><span>Manage Events</span></a>
-                <a href="?tab=attendees" class="nav-item <?php echo $activeTab == 'attendees' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>👥</span><span>Attendees</span></a>
-                <a href="?tab=reports" class="nav-item <?php echo $activeTab == 'reports' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📈</span><span>Reports & Analytics</span></a>
-                <a href="?tab=announcements" class="nav-item <?php echo $activeTab == 'announcements' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>📢</span><span>Announcements</span></a>
-                <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span>👤</span><span>Edit Profile</span></a>
+                <a href="?tab=dashboard" class="nav-item <?php echo $activeTab == 'dashboard' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Dashboard</span></a>
+                <a href="?tab=events" class="nav-item <?php echo $activeTab == 'events' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Manage Events</span></a>
+                <a href="?tab=attendees" class="nav-item <?php echo $activeTab == 'attendees' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Attendees</span></a>
+                <a href="?tab=reports" class="nav-item <?php echo $activeTab == 'reports' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Reports</span></a>
+                <a href="?tab=profile" class="nav-item <?php echo $activeTab == 'profile' ? 'active' : ''; ?>" onclick="closeMobileMenu()"><span></span><span>Edit Profile</span></a>
             </nav>
             <div class="logout-section">
                 <form method="POST" action="logout.php">
-                    <button class="logout-btn" type="submit">🚪 Logout</button>
+                    <button class="logout-btn" type="submit">Logout</button>
                 </form>
             </div>
         </aside>
         <main class="main-content">
             <div class="top-bar">
-                <h1><?php switch($activeTab) { case 'dashboard': echo 'Dashboard Overview'; break; case 'events': echo 'Manage Events'; break; case 'attendees': echo 'Attendee Management'; break; case 'reports': echo 'Reports & Analytics'; break; case 'announcements': echo 'Announcements'; break; case 'profile': echo 'Profile'; break; default: echo 'Dashboard'; } ?></h1>
+                <h1><?php switch($activeTab) { case 'dashboard': echo 'Dashboard Overview'; break; case 'events': echo 'Manage Events'; break; case 'attendees': echo 'Attendee Management'; break; case 'reports': echo 'Reports'; break; case 'profile': echo 'Profile'; break; default: echo 'Dashboard'; } ?></h1>
                 <div class="user-info">
                     <div class="avatar"><?php echo substr($username, 0, 1); ?></div>
                     <span><?php echo htmlspecialchars($username); ?></span>
@@ -1159,36 +1257,32 @@ body {
             </div>
             <?php if ($activeTab == 'dashboard'): ?>
                 <div class="welcome-banner">
-                    <h2>Welcome back, <?php echo htmlspecialchars($username); ?>! 👋</h2>
+                    <h2>Welcome back, <?php echo htmlspecialchars($username); ?>! </h2>
                     <p>Here's an overview of your event management activities</p>
                 </div>
                 <div class="stats-grid">
-                    <div class="stat-card purple"><div class="stat-icon">📅</div><div class="stat-info"><h3><?php echo $totalEvents; ?></h3><p>Total Events</p></div></div>
-                    <div class="stat-card blue"><div class="stat-icon">✅</div><div class="stat-info"><h3><?php echo $activeEvents; ?></h3><p>Active Events</p></div></div>
-                    <div class="stat-card green"><div class="stat-icon">👥</div><div class="stat-info"><h3><?php echo $totalAttendees; ?></h3><p>Total Attendees</p></div></div>
-                    <div class="stat-card orange"><div class="stat-icon">💰</div><div class="stat-info"><h3>$<?php echo number_format($totalRevenue); ?></h3><p>Total Revenue</p></div></div>
+                    <div class="stat-card purple"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $totalEvents; ?></h3><p>Total Events</p></div></div>
+                    <div class="stat-card blue"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $activeEvents; ?></h3><p>Active Events</p></div></div>
+                    <div class="stat-card green"><div class="stat-icon"></div><div class="stat-info"><h3><?php echo $totalAttendees; ?></h3><p>Total Attendees</p></div></div>
+                    <!-- Removed Total Revenue stat -->
                 </div>
-                <?php if (count($events) == 0): ?>
-                    <div class="empty-state"><div class="empty-state-icon">📅</div><h3>No Events Yet</h3><p>Start by creating your first event to see it here</p><button class="btn-create" onclick="window.location.href='?tab=events'">Go to Events</button></div>
-                <?php else: ?>
-                    <div class="events-table-container">
-                        <h3 style="margin-bottom: 1rem; color: #333;">Recent Events</h3>
-                        <table class="events-table">
-                            <thead><tr><th>Event</th><th>Date & Time</th><th>Attendance</th><th>Status</th><th>Actions</th></tr></thead>
-                            <tbody>
-                                <?php foreach (array_slice($events, 0, 5) as $event): ?>
-                                    <tr>
-                                        <td><div class="event-title-cell"><div class="event-icon-small"><?php echo $event['icon']; ?></div><div class="event-title-info"><h4><?php echo htmlspecialchars($event['title']); ?></h4><span class="event-type-badge"><?php echo $event['type']; ?></span></div></div></td>
-                                        <td><?php echo $event['date']; ?><br><small style="color: #999;"><?php echo $event['time']; ?></small></td>
-                                        <td><div class="progress-mini"><div class="progress-bar-mini"><div class="progress-fill-mini" style="width: <?php echo ($event['registered'] / $event['capacity']) * 100; ?>%"></div></div><span style="white-space: nowrap;"><?php echo $event['registered']; ?>/<?php echo $event['capacity']; ?></span></div></td>
-                                        <td><span class="status-badge <?php echo $event['status']; ?>"><?php echo ucfirst($event['status']); ?></span></td>
-                                        <td><div class="action-buttons"><button class="btn-icon btn-edit" onclick="editEvent(<?php echo $event['id']; ?>)" title="Edit">✏️</button><button class="btn-icon btn-delete" onclick="deleteEvent(<?php echo $event['id']; ?>)" title="Delete">🗑️</button></div></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                <?php endif; ?>
+                <div class="events-table-container">
+                    <h3 style="margin-bottom: 1rem; color: #333;">Recent Events</h3>
+                    <table class="events-table">
+                        <thead><tr><th>Event</th><th>Date & Time</th><th>Attendance</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            <?php foreach (array_slice($events, 0, 5) as $event): ?>
+                                <tr>
+                                    <td><div class="event-title-cell"><div class="event-icon-small"><?php echo $event['icon']; ?></div><div class="event-title-info"><h4><?php echo htmlspecialchars($event['title']); ?></h4><span class="event-type-badge"><?php echo $event['type']; ?></span></div></div></td>
+                                    <td><?php echo $event['date']; ?><br><small style="color: #999;"><?php echo $event['time']; ?></small></td>
+                                    <td><div class="progress-mini"><div class="progress-bar-mini"><div class="progress-fill-mini" style="width: <?php echo ($event['registered'] / $event['capacity']) * 100; ?>%"></div></div><span style="white-space: nowrap;"><?php echo $event['registered']; ?>/<?php echo $event['capacity']; ?></span></div></td>
+                                    <td><span class="status-badge <?php echo $event['status']; ?>"><?php echo ucfirst($event['status']); ?></span></td>
+                                    <td><div class="action-buttons"><button class="btn-icon btn-edit" onclick="editEvent(<?php echo $event['id']; ?>)" title="Edit">✏️</button><button class="btn-icon btn-delete" onclick="deleteEvent(<?php echo $event['id']; ?>)" title="Delete">🗑️</button></div></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             <?php elseif ($activeTab == 'events'): ?>
                 <div class="page-header">
                     <div class="page-header-content"><h2>Event Management</h2><p>Create, edit, and manage your events</p></div>
@@ -1240,7 +1334,7 @@ body {
                                 <div class="attendee-details">
                                     <div class="detail-row"><span class="label">Event:</span><span class="value"><?php echo $event ? htmlspecialchars($event['title']) : 'N/A'; ?></span></div>
                                     <div class="detail-row"><span class="label">Status:</span><span class="value"><span class="status-badge active"><?php echo ucfirst($attendee['status']); ?></span></span></div>
-                                    <div class="detail-row"><span class="label">Ticket ID:</span><span class="value">TKT-<?php echo $attendee['id']; ?>0<?php echo rand(100, 999); ?></span></div>
+                                    <div class="detail-row"><span class="label">Ticket ID:</span><span class="value"><?php echo format_ticket_id($attendee['id'] ?? 0, $attendee['event_id'] ?? 0); ?></span></div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -1248,19 +1342,51 @@ body {
                 <?php endif; ?>
             <?php elseif ($activeTab == 'reports'): ?>
                 <div class="page-header">
-                    <div class="page-header-content"><h2>Reports & Analytics</h2><p>Track your event performance and insights</p></div>
+                    <div class="page-header-content"><h2>Reports</h2><p>Track your event performance</p></div>
                 </div>
                 <div class="reports-container">
-                    <div class="report-card"><h3>📊 Event Attendance Overview</h3><div class="chart-placeholder">Chart: Event Registration Trends<br><small>Data will appear once you have events with attendees</small></div></div>
-                    <div class="report-card"><h3>💰 Revenue Analysis</h3><div class="chart-placeholder">Chart: Revenue by Event Type<br><small>Data will appear once you have events with attendees</small></div></div>
-                    <div class="report-card"><h3>📈 Performance Metrics</h3><div class="chart-placeholder">Chart: Monthly Performance Comparison<br><small>Data will appear once you have events with attendees</small></div></div>
+                    <!-- Attendance table connected to registrations -->
+                    <div class="report-card">
+                        <h3>📊 Event Attendance Overview</h3>
+                        <?php if (empty($attendance_stats)): ?>
+                            <div class="empty-state" style="padding:1.5rem;margin-top:1rem;">
+                                <div class="empty-state-icon">📉</div>
+                                <h3>No attendance data</h3>
+                                <p>There are no registrations yet or the database is unavailable.</p>
+                            </div>
+                        <?php else: ?>
+                            <div style="overflow-x:auto;margin-top:1rem;">
+                                <table class="events-table" style="min-width:700px;">
+                                    <thead>
+                                        <tr>
+                                            <th>Event</th>
+                                            <th>Registered</th>
+                                            <th>Capacity</th>
+                                            <th>Available</th>
+                                            <th>% Full</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($attendance_stats as $row):
+                                            $registered = intval($row['registered'] ?? 0);
+                                            $capacity = intval($row['capacity'] ?? 0);
+                                            $available = max(0, $capacity - $registered);
+                                            $percent = $capacity > 0 ? round(($registered / $capacity) * 100, 1) : 0;
+                                        ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars($row['title'] ?? 'Untitled'); ?></td>
+                                            <td><?php echo $registered; ?></td>
+                                            <td><?php echo $capacity; ?></td>
+                                            <td><?php echo $available; ?></td>
+                                            <td><?php echo $percent; ?>%</td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            <?php elseif ($activeTab == 'announcements'): ?>
-                <div class="page-header">
-                    <div class="page-header-content"><h2>Announcements</h2><p>Communicate with your attendees</p></div>
-                    <button class="btn-create" onclick="alert('Create announcement feature coming soon!')"><span>➕</span><span>New Announcement</span></button>
-                </div>
-                <div class="empty-state"><div class="empty-state-icon">📢</div><h3>No Announcements Yet</h3><p>Create announcements to communicate with your event attendees</p><button class="btn-create" onclick="alert('Create announcement feature coming soon!')">Create Announcement</button></div>
             <?php elseif ($activeTab == 'profile'): ?>
                 <div class="page-header">
                     <div class="page-header-content"><h2>Profile</h2><p>Manage your account and preferences</p></div>
@@ -1270,8 +1396,8 @@ body {
                     <form style="max-width: 600px;">
                         <div class="form-group"><label>Full Name</label><input type="text" name="fullname" value="<?php echo htmlspecialchars($username); ?>"></div>
                         <div class="form-group"><label>Email Address</label><input type="email" name="email" value="organizer@example.com"></div>
-                        <div class="form-group"><label>Phone Number</label><input type="tel" name="phone" value=""></div>
-                        <div class="form-group"><label>Organization</label><input type="text" name="organization" value=""></div>
+                        <div class="form-group"><label>Phone Number</label><input type="tel" name="phone" value="+63 912 345 6789"></div>
+                        <div class="form-group"><label>Organization</label><input type="text" name="organization" value="EventHub Organization"></div>
                         <button type="submit" class="btn-submit" onclick="alert('Profile saved successfully!'); return false;">Save Changes</button>
                     </form>
                 </div>

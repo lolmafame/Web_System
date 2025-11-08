@@ -17,11 +17,31 @@ try {
     $db_error = true;
 }
 
-// Fetch events from database
+// Fetch events from database (map multiple column names so organizer-created events appear)
 $events = [];
 if (!isset($db_error)) {
     try {
-        $stmt = $pdo->query("SELECT * FROM events WHERE status = 'active' ORDER BY event_date ASC");
+        $sql = "
+        SELECT
+            e.id,
+            e.title,
+            COALESCE(e.event_type, e.type) AS event_type,
+            COALESCE(e.event_date, e.date_text) AS event_date,
+            COALESCE(e.event_time, e.time_text) AS event_time,
+            e.location,
+            e.capacity,
+            COALESCE(r.registered,0) AS registered_count
+        FROM events e
+        LEFT JOIN (
+            SELECT event_id, COUNT(*) AS registered
+            FROM registrations
+            WHERE status = 'confirmed'
+            GROUP BY event_id
+        ) r ON e.id = r.event_id
+        WHERE e.status = 'active'
+        ORDER BY COALESCE(e.event_date, e.date_text) ASC
+        ";
+        $stmt = $pdo->query($sql);
         $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch(PDOException $e) {
         $events = [];
