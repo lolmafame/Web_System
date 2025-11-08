@@ -1570,21 +1570,21 @@ $newAnnouncementsCount = 0;
 
                 <div class="stats-grid">
                     <div class="stat-card purple">
-                        <div class="stat-icon">📅</div>
+                        <div class="stat-icon"></div>
                         <div class="stat-info">
                             <h3><?php echo $availableEventsCount; ?></h3>
                             <p>Available Events</p>
                         </div>
                     </div>
                     <div class="stat-card blue">
-                        <div class="stat-icon">✅</div>
+                        <div class="stat-icon"></div>
                         <div class="stat-info">
                             <h3><?php echo $myRegistrationsCount; ?></h3>
                             <p>My Registrations</p>
                         </div>
                     </div>
                     <div class="stat-card green">
-                        <div class="stat-icon">🎫</div>
+                        <div class="stat-icon"></div>
                         <div class="stat-info">
                             <h3><?php echo $myRegistrationsCount; ?></h3>
                             <p>Confirmed Tickets</p>
@@ -1601,12 +1601,12 @@ $newAnnouncementsCount = 0;
                             <p>Explore upcoming events</p>
                         </a>
                         <a href="?tab=registrations" class="action-card">
-                            <div class="action-card-icon">📝</div>
+                            <div class="action-card-icon"></div>
                             <h4>My Registrations</h4>
                             <p>View registered events</p>
                         </a>
                         <a href="?tab=tickets" class="action-card">
-                            <div class="action-card-icon">🎟️</div>
+                            <div class="action-card-icon"></div>
                             <h4>My Tickets</h4>
                             <p>Access your tickets</p>
                         </a>
