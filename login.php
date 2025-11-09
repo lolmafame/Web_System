@@ -1,14 +1,11 @@
 <?php
-// Start session
 session_start();
 
-// Database configuration (adjust if needed)
 $servername = "localhost";
 $db_username = "root";
 $db_password = "";
 $dbname = "event_management";
 
-// Connect to DB
 $conn = new mysqli($servername, $db_username, $db_password, $dbname);
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
@@ -23,7 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($email) || empty($password)) {
         $error = "Please enter your email and password.";
     } else {
-        // Fetch user by email
         $stmt = $conn->prepare("SELECT id, role, first_name, last_name, password_hash FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
@@ -34,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->fetch();
 
             if (password_verify($password, $password_hash)) {
-                // Successful login
                 $_SESSION['user_id'] = $id;
                 $_SESSION['role'] = $role;
                 $_SESSION['username'] = trim($first_name . ' ' . $last_name);

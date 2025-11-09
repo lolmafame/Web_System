@@ -1,5 +1,5 @@
 <?php
-    session_start();
+session_start();
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'attendee') {
     header("Location: login.php");
@@ -8,12 +8,10 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'attendee') {
 
 $username = $_SESSION['username'] ?? 'Guest';
 
-// DB connection
 $dsn = 'mysql:host=localhost;dbname=event_management;charset=utf8mb4';
 $dbUser = 'root';
 $dbPass = '';
 
-// helper: deterministic ticket id generator (registration_id + event_id -> stable token)
 function format_ticket_id($registrationId, $eventId) {
     $registrationId = intval($registrationId);
     $eventId = intval($eventId);
@@ -29,11 +27,32 @@ try {
     die('Database connection failed: ' . $e->getMessage());
 }
 
-// Read events and compute registered count & available slots
+$stmtCols = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events'");
+$stmtCols->execute();
+$eventCols = $stmtCols->fetchAll(PDO::FETCH_COLUMN);
+
+function coalesceCols(array $candidates, array $existing, $alias, $tablePrefix = 'e') {
+    $found = [];
+    foreach ($candidates as $c) {
+        if (in_array($c, $existing, true)) $found[] = "{$tablePrefix}.{$c}";
+    }
+    if (empty($found)) return "'' AS {$alias}";
+    return "COALESCE(" . implode(', ', $found) . ", '') AS {$alias}";
+}
+
+$dateExpr = coalesceCols(['date_text','event_date','date'], $eventCols, 'date');
+$timeExpr = coalesceCols(['time_text','event_time','time'], $eventCols, 'time');
+$typeExpr = coalesceCols(['type','event_type'], $eventCols, 'type');
+$titleExpr = coalesceCols(['title','event_title','name'], $eventCols, 'title');
+
 $sql = "
 SELECT e.*,
+       {$titleExpr},
+       {$typeExpr},
+       {$dateExpr},
+       {$timeExpr},
        COALESCE(r.registered,0) AS registered,
-       (e.capacity - COALESCE(r.registered,0)) AS available
+       (COALESCE(e.capacity,0) - COALESCE(r.registered,0)) AS available
 FROM events e
 LEFT JOIN (
     SELECT event_id, COUNT(*) AS registered
@@ -41,12 +60,11 @@ LEFT JOIN (
     WHERE status = 'confirmed'
     GROUP BY event_id
 ) r ON e.id = r.event_id
-WHERE e.status = 'active'
-ORDER BY e.created_at ASC
+WHERE COALESCE(e.status, 'active') = 'active'
+ORDER BY COALESCE(e.created_at, e.id) ASC
 ";
 $events = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-// Handle AJAX register/cancel (use transactions)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
     $userId = intval($_SESSION['user_id'] ?? 0);
@@ -57,7 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $eventId = intval($_POST['eventId']);
             try {
                 $pdo->beginTransaction();
-                // check available
                 $stmt = $pdo->prepare("SELECT e.capacity, COALESCE(r.registered,0) AS registered, (e.capacity - COALESCE(r.registered,0)) AS available
                                        FROM events e
                                        LEFT JOIN (
@@ -72,7 +89,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     exit();
                 }
 
-                // ensure user not already registered (prevent duplicates)
                 $chk = $pdo->prepare("SELECT id FROM registrations WHERE user_id = :uid AND event_id = :eid AND status = 'confirmed' LIMIT 1");
                 $chk->execute([':uid'=>$userId, ':eid'=>$eventId]);
                 if ($chk->fetch()) {
@@ -81,7 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     exit();
                 }
 
-                // insert registration
                 $ins = $pdo->prepare("INSERT INTO registrations (user_id,event_id,status) VALUES (:uid,:eid,'confirmed')");
                 $ins->execute([':uid'=>$userId,':eid'=>$eventId]);
                 $pdo->commit();
@@ -105,7 +120,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// === Profile update / avatar upload handler ===
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['profile_action']) && $_POST['profile_action'] === 'save_profile') {
     $userId = intval($_SESSION['user_id'] ?? 0);
     if (!$userId) {
@@ -114,87 +128,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['profile_action']) && 
         exit();
     }
 
-    // Ensure upload directory exists
-    $uploadDir = __DIR__ . '/uploads/avatars';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0755, true);
+    $fullname = trim($_POST['fullname'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $organization = trim($_POST['organization'] ?? '');
+    $bio = trim($_POST['bio'] ?? '');
+
+    $parts = preg_split('/\s+/', $fullname, 2, PREG_SPLIT_NO_EMPTY);
+    $first_name = $parts[0] ?? '';
+    $last_name = $parts[1] ?? '';
+
+    try {
+        $stmt = $pdo->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, phone = :phone, organization = :organization, bio = :bio WHERE id = :uid");
+        $stmt->execute([
+            ':first_name' => $first_name,
+            ':last_name' => $last_name,
+            ':email' => $email,
+            ':phone' => $phone,
+            ':organization' => $organization,
+            ':bio' => $bio,
+            ':uid' => $userId
+        ]);
+
+        $_SESSION['first_name'] = $first_name;
+        $_SESSION['last_name'] = $last_name;
+        $_SESSION['email'] = $email;
+        $_SESSION['phone'] = $phone;
+        $_SESSION['organization'] = $organization;
+        $_SESSION['bio'] = $bio;
+        $_SESSION['username'] = trim(($first_name . ' ' . $last_name)) ?: ($_SESSION['username'] ?? '');
+
+        $_SESSION['profile_success'] = 'Profile updated successfully';
+    } catch (Exception $e) {
+        $logDir = __DIR__ . '/logs';
+        if (!is_dir($logDir)) mkdir($logDir, 0755, true);
+        file_put_contents($logDir . '/profile_update.log', date('Y-m-d H:i:s') . " | Profile update error: " . $e->getMessage() . PHP_EOL, FILE_APPEND | LOCK_EX);
+
+        $_SESSION['profile_error'] = 'Profile update failed. Please try again.';
     }
 
-    // handle avatar file if provided
-    if (!empty($_FILES['avatar']) && $_FILES['avatar']['error'] !== UPLOAD_ERR_NO_FILE) {
-        $file = $_FILES['avatar'];
-
-        // basic validations
-        $allowedTypes = ['image/jpeg','image/png','image/gif'];
-        $maxSize = 2 * 1024 * 1024; // 2MB
-
-        if ($file['error'] !== UPLOAD_ERR_OK) {
-            $_SESSION['profile_error'] = 'File upload error';
-        } elseif (!in_array(mime_content_type($file['tmp_name']), $allowedTypes, true)) {
-            $_SESSION['profile_error'] = 'Allowed types: JPG, PNG, GIF';
-        } elseif ($file['size'] > $maxSize) {
-            $_SESSION['profile_error'] = 'File too large (max 2MB)';
-        } else {
-            $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-            $safeName = 'avatar_' . $userId . '_' . time() . '.' . $ext;
-            $target = $uploadDir . '/' . $safeName;
-
-            if (move_uploaded_file($file['tmp_name'], $target)) {
-                // update DB users.avatar if column exists, else store in session
-                try {
-                    $stmt = $pdo->prepare("UPDATE users SET avatar = :avatar WHERE id = :uid");
-                    $stmt->execute([':avatar' => $safeName, ':uid' => $userId]);
-                    $_SESSION['avatar'] = $safeName;
-                    $_SESSION['profile_success'] = 'Profile photo updated';
-                } catch (Exception $e) {
-                    // fallback: keep filename in session
-                    $_SESSION['avatar'] = $safeName;
-                    $_SESSION['profile_success'] = 'Profile photo uploaded (DB update failed)';
-                }
-            } else {
-                $_SESSION['profile_error'] = 'Failed to move uploaded file';
-            }
-        }
-    } else {
-        // no file uploaded — optionally handle other profile fields here
-        $_SESSION['profile_error'] = 'No file selected';
-    }
-
-    // redirect to avoid resubmission
     header('Location: ' . $_SERVER['REQUEST_URI']);
     exit();
 }
 
-// Get current tab
 $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'dashboard';
 
-// --- replaced session-based registrations with DB-backed fetch ---
-
-// Fetch registered events from database for this user
 $userId = intval($_SESSION['user_id'] ?? 0);
 if ($userId) {
-    $stmt = $pdo->prepare("
-        SELECT e.*, r.id AS registration_id, r.created_at AS reg_created
-        FROM events e
-        INNER JOIN registrations r ON e.id = r.event_id
-        WHERE r.user_id = :uid AND r.status = 'confirmed'
-        ORDER BY r.created_at DESC
-    ");
+    $regSql = "
+    SELECT e.*, r.id AS registration_id, r.created_at AS reg_created,
+           {$titleExpr},
+           {$typeExpr},
+           {$dateExpr},
+           {$timeExpr}
+    FROM events e
+    INNER JOIN registrations r ON e.id = r.event_id
+    WHERE r.user_id = :uid AND r.status = 'confirmed'
+    ORDER BY r.created_at DESC
+    ";
+    $stmt = $pdo->prepare($regSql);
     $stmt->execute([':uid' => $userId]);
     $registeredEvents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    // list of event ids the user registered to
     $registeredEventIds = array_map(function($r){ return intval($r['id']); }, $registeredEvents);
 } else {
     $registeredEvents = [];
     $registeredEventIds = [];
 }
 
-// Announcements feature removed — no DB fetch here
+$user = [];
+$userId = intval($_SESSION['user_id'] ?? 0);
+if ($userId) {
+    try {
+        $uStmt = $pdo->prepare("SELECT id, role, first_name, last_name, email, phone, organization, bio FROM users WHERE id = :id LIMIT 1");
+        $uStmt->execute([':id' => $userId]);
+        $user = $uStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-// Counts used in the UI
+        if (empty($_SESSION['username'])) {
+            $_SESSION['username'] = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: ($_SESSION['username'] ?? 'Guest');
+        }
+        if (!isset($_SESSION['email']) && isset($user['email'])) $_SESSION['email'] = $user['email'];
+        if (!isset($_SESSION['phone']) && isset($user['phone'])) $_SESSION['phone'] = $user['phone'];
+        if (!isset($_SESSION['organization']) && isset($user['organization'])) $_SESSION['organization'] = $user['organization'];
+        if (!isset($_SESSION['bio']) && isset($user['bio'])) $_SESSION['bio'] = $user['bio'];
+    } catch (Exception $e) {
+        $user = [];
+    }
+}
+
 $myRegistrationsCount = count($registeredEvents);
 
-// Available events count = active events with available slots that the user hasn't registered to
 $availableEventsCount = 0;
 foreach ($events as $ev) {
     $evId = intval($ev['id'] ?? 0);
@@ -231,7 +253,6 @@ $newAnnouncementsCount = 0;
             min-height: 100vh;
         }
 
-        /* Mobile Menu Toggle */
         .mobile-menu-toggle {
             display: none;
             position: fixed;
@@ -258,7 +279,6 @@ $newAnnouncementsCount = 0;
             background: #e74c3c;
         }
 
-        /* Overlay for mobile */
         .sidebar-overlay {
             display: none;
             position: fixed;
@@ -633,12 +653,6 @@ $newAnnouncementsCount = 0;
         }
 
         .capacity-info strong {
-            color: #667eea;
-        }
-
-        .progress-bar {
-            height: 8px;
-            background: #f0f0f0;
             color: #667eea;
         }
 
@@ -1099,7 +1113,6 @@ $newAnnouncementsCount = 0;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
 
-        /* Tablet Responsive */
         @media (max-width: 1024px) {
             .sidebar {
                 width: 240px;
@@ -1119,7 +1132,6 @@ $newAnnouncementsCount = 0;
             }
         }
 
-        /* Mobile Responsive */
         @media (max-width: 768px) {
             .mobile-menu-toggle {
                 display: block;
@@ -1277,7 +1289,6 @@ $newAnnouncementsCount = 0;
             }
         }
 
-        /* Small Mobile */
         @media (max-width: 480px) {
             .main-content {
                 padding: 0.75rem;
@@ -1393,30 +1404,6 @@ $newAnnouncementsCount = 0;
             }
         }
 
-        /* Landscape Mobile */
-        @media (max-width: 768px) and (orientation: landscape) {
-            .sidebar {
-                width: 240px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-
-            .action-cards {
-                grid-template-columns: repeat(4, 1fr);
-            }
-
-            .events-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .tickets-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        /* Extra Small Devices */
         @media (max-width: 320px) {
             .mobile-menu-toggle {
                 width: 45px;
@@ -1449,10 +1436,6 @@ $newAnnouncementsCount = 0;
                 font-size: 1.75rem;
             }
 
-            .stat-info h3 {
-                font-size: 1.3rem;
-            }
-
             .action-card {
                 padding: 0.875rem;
             }
@@ -1466,7 +1449,6 @@ $newAnnouncementsCount = 0;
             }
         }
 
-        /* Print Styles */
         @media print {
             .sidebar,
             .mobile-menu-toggle,
@@ -1493,16 +1475,13 @@ $newAnnouncementsCount = 0;
     </style>
 </head>
 <body>
-    <!-- Mobile Menu Toggle -->
     <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" id="mobileMenuBtn">
         ☰
     </button>
 
-    <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" onclick="toggleMobileMenu()" id="sidebarOverlay"></div>
 
     <div class="dashboard-container">
-        <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h2>EventHub</h2>
@@ -1536,7 +1515,6 @@ $newAnnouncementsCount = 0;
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="main-content">
             <div class="top-bar">
                 <h1>
@@ -1560,7 +1538,6 @@ $newAnnouncementsCount = 0;
             </div>
 
             <?php if ($activeTab == 'dashboard'): ?>
-                <!-- Dashboard -->
                 <div class="welcome-banner">
                     <div>
                         <h2>Welcome back, <?php echo htmlspecialchars($username); ?>! 👋</h2>
@@ -1570,21 +1547,21 @@ $newAnnouncementsCount = 0;
 
                 <div class="stats-grid">
                     <div class="stat-card purple">
-                        <div class="stat-icon"></div>
+                        <div class="stat-icon">📅</div>
                         <div class="stat-info">
                             <h3><?php echo $availableEventsCount; ?></h3>
                             <p>Available Events</p>
                         </div>
                     </div>
                     <div class="stat-card blue">
-                        <div class="stat-icon"></div>
+                        <div class="stat-icon">✅</div>
                         <div class="stat-info">
                             <h3><?php echo $myRegistrationsCount; ?></h3>
                             <p>My Registrations</p>
                         </div>
                     </div>
                     <div class="stat-card green">
-                        <div class="stat-icon"></div>
+                        <div class="stat-icon">🎫</div>
                         <div class="stat-info">
                             <h3><?php echo $myRegistrationsCount; ?></h3>
                             <p>Confirmed Tickets</p>
@@ -1601,12 +1578,12 @@ $newAnnouncementsCount = 0;
                             <p>Explore upcoming events</p>
                         </a>
                         <a href="?tab=registrations" class="action-card">
-                            <div class="action-card-icon"></div>
+                            <div class="action-card-icon">📝</div>
                             <h4>My Registrations</h4>
                             <p>View registered events</p>
                         </a>
                         <a href="?tab=tickets" class="action-card">
-                            <div class="action-card-icon"></div>
+                            <div class="action-card-icon">🎟️</div>
                             <h4>My Tickets</h4>
                             <p>Access your tickets</p>
                         </a>
@@ -1614,7 +1591,6 @@ $newAnnouncementsCount = 0;
                 </div>
 
             <?php elseif ($activeTab == 'events'): ?>
-                <!-- Browse Events -->
                 <div class="page-header">
                     <h2>Upcoming Events</h2>
                     <p>Discover and register for events that interest you</p>
@@ -1705,7 +1681,6 @@ $newAnnouncementsCount = 0;
                 <?php endif; ?>
 
             <?php elseif ($activeTab == 'registrations'): ?>
-                <!-- My Registrations -->
                 <div class="page-header">
                     <h2>My Registrations</h2>
                     <p>Events you've registered for</p>
@@ -1760,7 +1735,6 @@ $newAnnouncementsCount = 0;
                 <?php endif; ?>
 
             <?php elseif ($activeTab == 'tickets'): ?>
-                <!-- My Tickets -->
                 <div class="page-header">
                     <h2>My Tickets</h2>
                     <p>Access your event passes and QR codes</p>
@@ -1812,70 +1786,43 @@ $newAnnouncementsCount = 0;
                 <?php endif; ?>
 
             <?php elseif ($activeTab == 'profile'): ?>
-                <!-- Edit Profile -->
                 <div class="page-header">
                     <h2>Edit Profile</h2>
                     <p>Update your personal information</p>
                 </div>
 
                 <div class="profile-container">
-                    <div class="profile-avatar">
-                        <div class="avatar-circle">
-                            <?php echo substr($username, 0, 1); ?>
-                        </div>
-
-                        <?php
-                            // prefer DB/session avatar filename if available
-                            $avatarFile = $_SESSION['avatar'] ?? '';
-                            // if you store avatar in DB and fetched $user earlier, prefer $user['avatar']
-                            if (!empty($user['avatar'])) $avatarFile = $user['avatar'] ?? $avatarFile;
-                        ?>
-
-                        <?php if ($avatarFile): ?>
-                            <div style="text-align:center;margin:10px 0;">
-                                <img src="uploads/avatars/<?php echo htmlspecialchars($avatarFile); ?>"
-                                     alt="avatar"
-                                     style="width:120px;height:120px;border-radius:50%;object-fit:cover;">
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <form class="profile-form" method="POST" action="" enctype="multipart/form-data">
-                        <div class="form-group">
-                            <label>Profile Photo</label>
-                            <input type="file" name="avatar" accept="image/jpeg,image/png,image/gif">
-                            <input type="hidden" name="profile_action" value="save_profile">
-                        </div>
-
+                    <form class="profile-form" method="POST" action="">
+                        <input type="hidden" name="profile_action" value="save_profile">
+ 
                         <div class="form-group">
                             <label>Full Name</label>
-                            <input type="text" name="fullname" value="<?php echo htmlspecialchars($username); ?>">
+                            <input type="text" name="fullname" value="<?php echo htmlspecialchars(trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: ($_SESSION['username'] ?? '')); ?>">
                         </div>
                         <div class="form-group">
                             <label>Email Address</label>
-                            <input type="email" name="email" value="<?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?>">
+                            <input type="email" name="email" value="<?php echo htmlspecialchars($user['email'] ?? $_SESSION['email'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label>Phone Number</label>
-                            <input type="tel" name="phone" value="<?php echo htmlspecialchars($_SESSION['phone'] ?? ''); ?>">
+                            <input type="tel" name="phone" value="<?php echo htmlspecialchars($user['phone'] ?? $_SESSION['phone'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label>Organization</label>
-                            <input type="text" name="organization" value="<?php echo htmlspecialchars($_SESSION['organization'] ?? ''); ?>">
+                            <input type="text" name="organization" value="<?php echo htmlspecialchars($user['organization'] ?? $_SESSION['organization'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label>Bio</label>
-                            <textarea name="bio" rows="4"><?php echo htmlspecialchars($_SESSION['bio'] ?? ''); ?></textarea>
+                            <textarea name="bio" rows="4"><?php echo htmlspecialchars($user['bio'] ?? $_SESSION['bio'] ?? ''); ?></textarea>
                         </div>
-                        <button type="submit" class="btn-save">Save Changes</button>
-                    </form>
-                </div>
-            <?php endif; ?>
+                         <button type="submit" class="btn-save">Save Changes</button>
+                     </form>
+                 </div>
+             <?php endif; ?>
         </main>
     </div>
 
     <script>
-        // Mobile menu toggle
         function toggleMobileMenu() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -1892,7 +1839,6 @@ $newAnnouncementsCount = 0;
             }
         }
 
-        // Close mobile menu when clicking on nav items
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', function() {
                 if (window.innerWidth <= 768) {
@@ -1901,7 +1847,6 @@ $newAnnouncementsCount = 0;
             });
         });
 
-        // Handle window resize
         window.addEventListener('resize', function() {
             if (window.innerWidth > 768) {
                 const sidebar = document.getElementById('sidebar');
@@ -1915,7 +1860,6 @@ $newAnnouncementsCount = 0;
             }
         });
 
-        // Filter events by search and type
         function filterEvents() {
             const searchInput = document.getElementById('searchInput');
             const typeFilter = document.getElementById('typeFilter');
@@ -1933,7 +1877,6 @@ $newAnnouncementsCount = 0;
             });
         }
 
-        // Register for event
         function registerEvent(eventId) {
             if (!confirm('Are you sure you want to register for this event?')) return;
 
@@ -1960,7 +1903,6 @@ $newAnnouncementsCount = 0;
             });
         }
 
-        // Cancel registration (removes user's confirmed registration for the event)
         function cancelRegistration(eventId) {
             if (!confirm('Are you sure you want to cancel this registration?')) return;
 
@@ -1976,7 +1918,6 @@ $newAnnouncementsCount = 0;
             .then(data => {
                 if (data.success) {
                     alert(data.message);
-                    // reload so event moves from "My Registrations" back to available list
                     location.reload();
                 } else {
                     alert('Cancellation failed: ' + (data.message || 'Please try again.'));

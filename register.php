@@ -1,9 +1,6 @@
 <?php
 session_start();
-
-// If user is already logged in, redirect them
 if(isset($_SESSION['user_id'])){
-    // Check their role and send to correct dashboard
     if($_SESSION['role'] == 'organizer'){
         header("Location: organizer_dashboard.php");
     } else {
@@ -12,14 +9,10 @@ if(isset($_SESSION['user_id'])){
     exit();
 }
 
-// Variables to store messages
 $error = '';
 $success = '';
-
-// Check if form was submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    // Get all form data
     $role = $_POST['role'];
     $first_name = trim($_POST['first_name']);
     $last_name = trim($_POST['last_name']);
@@ -29,67 +22,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
 
-    // Start validation - check each field one by one
-    
-    // Check if role is selected
     if (empty($role) || ($role != 'attendee' && $role != 'organizer')) {
         $error = 'Please select a valid role';
     } 
-    // Check if names are filled
     elseif (empty($first_name) || empty($last_name)) {
         $error = 'First name and last name are required';
     } 
-    // Check if email is valid
     elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address';
     } 
-    // Check password length
     elseif (empty($password) || strlen($password) < 8) {
         $error = 'Password must be at least 8 characters';
     } 
-    // Check if password has uppercase letter
     elseif (!preg_match('/[A-Z]/', $password)) {
         $error = 'Password must contain at least one uppercase letter';
     } 
-    // Check if password has number
     elseif (!preg_match('/[0-9]/', $password)) {
         $error = 'Password must contain at least one number';
     } 
-    // Check if passwords match
     elseif ($password !== $confirm_password) {
         $error = 'Passwords do not match';
     } 
-    // If all validation passed
     else {
         
-        // Database settings - CHANGE THESE TO YOUR DATABASE INFO
         $db_host = 'localhost';
         $db_name = 'event_management';
         $db_user = 'root';
         $db_pass = '';
 
         try {
-            // Connect to database
-            $connection = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
-            $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-            // Check if email already exists in database
+            $dsn = "mysql:host=$db_host;dbname=$db_name;charset=utf8mb4";
+            $connection = new PDO($dsn, $db_user, $db_pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
+ 
             $check_email = $connection->prepare("SELECT id FROM users WHERE email = ?");
             $check_email->execute([$email]);
             
-            // If email exists, show error
             if ($check_email->rowCount() > 0) {
                 $error = 'Email address already registered';
             } 
-            // If email is new, create account
+        
             else {
-                // Make password secure (hash it)
                 $secure_password = password_hash($password, PASSWORD_DEFAULT);
-
-                // Prepare SQL to insert new user
-                $insert_user = $connection->prepare("INSERT INTO users (role, first_name, last_name, email, phone, organization, password, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+ 
+                $insert_user = $connection->prepare("INSERT INTO users (role, first_name, last_name, email, phone, organization, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
                 
-                // Execute the insert
                 $insert_user->execute([
                     $role, 
                     $first_name, 
@@ -99,16 +79,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $organization, 
                     $secure_password
                 ]);
-
-                // Show success message
+ 
                 $success = 'Registration successful! Redirecting to login...';
                 
-                // Redirect to login page after 2 seconds
                 header("refresh:2;url=login.php");
             }
             
         } catch(PDOException $e) {
-            // If database error, show message
+            $logDir = __DIR__ . '/logs';
+            if (!is_dir($logDir)) mkdir($logDir, 0755, true);
+            $msg = date('Y-m-d H:i:s') . " | Register error: " . $e->getMessage() . PHP_EOL;
+            file_put_contents($logDir . '/register_errors.log', $msg, FILE_APPEND | LOCK_EX);
             $error = 'Registration failed. Please try again.';
         }
     }
@@ -741,72 +722,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
-        // Variable to remember which role was selected
         let selectedRoleValue = '';
 
         <?php if (!empty($error) && isset($_POST['role'])): ?>
-        // If there was an error after submitting, show the form again with the selected role
         window.addEventListener('DOMContentLoaded', function() {
             selectedRoleValue = '<?php echo $_POST['role']; ?>';
             document.getElementById('roleSelectionStep').style.display = 'none';
             document.getElementById('registrationFormStep').style.display = 'block';
             document.getElementById('selectedRole').value = selectedRoleValue;
             
-            // Show role badge at top
             var roleName = selectedRoleValue.charAt(0).toUpperCase() + selectedRoleValue.slice(1);
             var roleIcon = selectedRoleValue === 'attendee' ? '👤' : '👨‍💼';
             document.getElementById('selectedRoleBadge').textContent = roleIcon + ' ' + roleName;
             
-            // Hide organization field if attendee
             if (selectedRoleValue === 'attendee') {
                 document.getElementById('organizationGroup').style.display = 'none';
             }
         });
         <?php endif; ?>
 
-        // Function when user clicks on a role card
         function selectRole(role) {
-            // Remove highlight from all cards
             var allCards = document.querySelectorAll('.role-card');
             for (var i = 0; i < allCards.length; i++) {
                 allCards[i].classList.remove('selected');
             }
 
-            // Highlight the clicked card
             event.currentTarget.classList.add('selected');
 
-            // Check the radio button
             var roleId = 'role' + role.charAt(0).toUpperCase() + role.slice(1);
             document.getElementById(roleId).checked = true;
 
-            // Remember the selected role
             selectedRoleValue = role;
 
-            // Enable the continue button
             document.getElementById('btnContinue').disabled = false;
         }
 
-        // Function when user clicks "Continue to Registration"
         function continueToForm() {
-            // Make sure a role was selected
             if (!selectedRoleValue) {
                 alert('Please select a role');
                 return;
             }
 
-            // Hide role selection, show registration form
             document.getElementById('roleSelectionStep').style.display = 'none';
             document.getElementById('registrationFormStep').style.display = 'block';
 
-            // Set the hidden role field
             document.getElementById('selectedRole').value = selectedRoleValue;
             
-            // Show role badge at top of form
             var roleName = selectedRoleValue.charAt(0).toUpperCase() + selectedRoleValue.slice(1);
             var roleIcon = selectedRoleValue === 'attendee' ? '👤' : '👨‍💼';
             document.getElementById('selectedRoleBadge').textContent = roleIcon + ' ' + roleName;
 
-            // Hide organization field if user is an attendee
             var orgGroup = document.getElementById('organizationGroup');
             if (selectedRoleValue === 'attendee') {
                 orgGroup.style.display = 'none';
@@ -815,47 +780,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Function when user clicks "Back" button
         function backToRoleSelection() {
             document.getElementById('roleSelectionStep').style.display = 'block';
             document.getElementById('registrationFormStep').style.display = 'none';
         }
 
-        // Validate form before submitting
         document.getElementById('registerForm').addEventListener('submit', function(e) {
             var password = document.getElementById('password').value;
             var confirmPassword = document.getElementById('confirmPassword').value;
             var email = document.getElementById('email').value;
 
-            // Check if passwords match
             if (password !== confirmPassword) {
                 e.preventDefault();
                 alert('Passwords do not match');
                 return false;
             }
 
-            // Check password length
             if (password.length < 8) {
                 e.preventDefault();
                 alert('Password must be at least 8 characters');
                 return false;
             }
 
-            // Check if password has uppercase letter
             if (!/[A-Z]/.test(password)) {
                 e.preventDefault();
                 alert('Password must contain at least one uppercase letter');
                 return false;
             }
 
-            // Check if password has number
             if (!/[0-9]/.test(password)) {
                 e.preventDefault();
                 alert('Password must contain at least one number');
                 return false;
             }
-
-            // Check email format
             var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailPattern.test(email)) {
                 e.preventDefault();
@@ -863,8 +820,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 return false;
             }
         });
-
-        // Hide error message when user starts typing
         var allInputs = document.querySelectorAll('input');
         for (var i = 0; i < allInputs.length; i++) {
             allInputs[i].addEventListener('input', function() {

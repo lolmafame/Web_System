@@ -347,116 +347,111 @@ $userName = $isLoggedIn ? $_SESSION['user_name'] : '';
             margin-bottom: 1rem;
         }
 
-        /* Contact Section */
-        .contact-section {
+        /* About Us Section */
+        .about-section {
             max-width: 1200px;
             margin: 4rem auto;
             padding: 0 2rem;
         }
 
-        .contact-container {
+        .about-content {
+            background: white;
+            padding: 3rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 3rem;
+        }
+
+        .about-content h3 {
+            color: #667eea;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .about-content p {
+            color: #666;
+            margin-bottom: 1.5rem;
+            line-height: 1.8;
+            font-size: 1.05rem;
+        }
+
+        .mission-vision {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 3rem;
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .mission-box, .vision-box {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .mission-box h3, .vision-box h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .mission-box p, .vision-box p {
+            color: #666;
+            line-height: 1.8;
+        }
+
+        .team-section {
+            margin-top: 3rem;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
             margin-top: 2rem;
         }
 
-        .contact-info {
+        .team-member {
             background: white;
             padding: 2rem;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s;
         }
 
-        .contact-info h3 {
-            color: #667eea;
-            margin-bottom: 1.5rem;
-            font-size: 1.5rem;
+        .team-member:hover {
+            transform: translateY(-5px);
         }
 
-        .contact-item {
+        .team-member-icon {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
             display: flex;
-            align-items: start;
-            margin-bottom: 1.5rem;
-        }
-
-        .contact-icon {
-            font-size: 1.5rem;
-            margin-right: 1rem;
-            min-width: 30px;
-        }
-
-        .contact-details h4 {
-            margin-bottom: 0.25rem;
-            color: #333;
-        }
-
-        .contact-details p {
-            color: #666;
-            line-height: 1.6;
-        }
-
-        .contact-form {
-            background: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .contact-form h3 {
-            color: #667eea;
-            margin-bottom: 1.5rem;
-            font-size: 1.5rem;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #333;
-            font-weight: 500;
-        }
-
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            font-size: 1rem;
-            font-family: inherit;
-            transition: border-color 0.3s;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 120px;
-        }
-
-        .btn-submit {
-            width: 100%;
-            padding: 0.75rem;
-            background: #667eea;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 2.5rem;
             color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            transition: background 0.3s;
         }
 
-        .btn-submit:hover {
-            background: #764ba2;
+        .team-member h4 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+
+        .team-member p {
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .team-member span {
+            color: #666;
+            font-size: 0.9rem;
         }
 
         /* Footer */
@@ -541,9 +536,17 @@ $userName = $isLoggedIn ? $_SESSION['user_name'] : '';
                 gap: 1.5rem;
             }
 
-            .contact-container {
+            .about-content {
+                padding: 2rem 1.5rem;
+            }
+
+            .mission-vision {
                 grid-template-columns: 1fr;
-                gap: 2rem;
+                gap: 1.5rem;
+            }
+
+            .team-grid {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -565,7 +568,7 @@ $userName = $isLoggedIn ? $_SESSION['user_name'] : '';
             <ul class="nav-links" id="navLinks">
                 <li><a href="#home">Home</a></li>
                 <li><a href="#events">Browse Events</a></li>
-                <li><a href="#contact">Contact</a></li>
+                <li><a href="#about">About Us</a></li>
             </ul>
             <div class="auth-buttons" id="authButtons">
                 <?php if ($isLoggedIn): ?>
@@ -652,83 +655,39 @@ $userName = $isLoggedIn ? $_SESSION['user_name'] : '';
         </div>
     </section>
 
-    <!-- Contact Section -->
-    <section class="contact-section" id="contact">
+    <!-- About Us Section -->
+    <section class="about-section" id="about">
         <div class="section-header">
-            <h2>Contact Us</h2>
-            <p>Have questions? Get in touch with us</p>
+            <h2>About Us</h2>
+            <p>Learn more about our event management platform</p>
         </div>
 
-        <div class="contact-container">
-            <!-- Contact Information -->
-            <div class="contact-info">
-                <h3>Get In Touch</h3>
-                
-                <div class="contact-item">
-                    <div class="contact-icon">📍</div>
-                    <div class="contact-details">
-                        <h4>Address</h4>
-                        <p>University of Caloocan City<br>
-                        Biglang Awa Street, Caloocan City<br>
-                        Metro Manila, Philippines 1400</p>
-                    </div>
-                </div>
+        <div class="about-content">
+            <h3>Welcome to EventHub</h3>
+            <p>
+                EventHub is the University of Caloocan City's premier event management platform, designed to streamline the process of organizing, discovering, and attending campus events. Our platform serves as a central hub where students, faculty, and staff can easily browse upcoming seminars, workshops, and conferences, and register with just a few clicks.
+            </p>
+            <p>
+                Founded in 2025, EventHub was created to address the growing need for a unified, efficient system that brings the entire UCC community together through meaningful events and educational opportunities. We believe that events are more than just gatherings—they're opportunities for learning, networking, and building a stronger campus community.
+            </p>
+            <p>
+                Our user-friendly platform eliminates the hassle of traditional event registration, providing instant confirmations, automated notifications, and real-time capacity tracking. Whether you're an event organizer looking to manage your seminars or an attendee searching for exciting opportunities to learn and grow, EventHub has you covered.
+            </p>
+        </div>
 
-                <div class="contact-item">
-                    <div class="contact-icon">📧</div>
-                    <div class="contact-details">
-                        <h4>Email</h4>
-                        <p>events@ucc.edu.ph<br>
-                        support@eventhub.ucc.edu.ph</p>
-                    </div>
-                </div>
-
-                <div class="contact-item">
-                    <div class="contact-icon">📞</div>
-                    <div class="contact-details">
-                        <h4>Phone</h4>
-                        <p>+63 2 8961-5497<br>
-                        +63 917 123 4567 (Mobile)</p>
-                    </div>
-                </div>
-
-                <div class="contact-item">
-                    <div class="contact-icon">🕒</div>
-                    <div class="contact-details">
-                        <h4>Office Hours</h4>
-                        <p>Monday - Friday: 8:00 AM - 5:00 PM<br>
-                        Saturday: 9:00 AM - 12:00 PM<br>
-                        Sunday: Closed</p>
-                    </div>
-                </div>
+        <div class="mission-vision">
+            <div class="mission-box">
+                <h3>🎯 Our Mission</h3>
+                <p>
+                    To provide the University of Caloocan City community with a seamless, accessible, and efficient platform for discovering and participating in educational and professional development events, fostering a culture of continuous learning and engagement.
+                </p>
             </div>
 
-            <!-- Contact Form -->
-            <div class="contact-form">
-                <h3>Send us a Message</h3>
-                <form id="contactForm" method="POST" action="contact_handler.php">
-                    <div class="form-group">
-                        <label for="name">Full Name</label>
-                        <input type="text" id="name" name="name" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="email">Email Address</label>
-                        <input type="email" id="email" name="email" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="subject">Subject</label>
-                        <input type="text" id="subject" name="subject" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="message">Message</label>
-                        <textarea id="message" name="message" required></textarea>
-                    </div>
-
-                    <button type="submit" class="btn-submit">Send Message</button>
-                </form>
+            <div class="vision-box">
+                <h3>👁️ Our Vision</h3>
+                <p>
+                    To become the leading event management solution for educational institutions in the Philippines, recognized for innovation, reliability, and our commitment to enhancing the student experience through technology.
+                </p>
             </div>
         </div>
     </section>
